@@ -9,6 +9,10 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Playwright
+test-results/
+playwright-report/
+
 # Native
 .kotlin/
 *.orig.*
@@ -31,7 +35,9 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+!config/.env.example
 
 # typescript
 *.tsbuildinfo
