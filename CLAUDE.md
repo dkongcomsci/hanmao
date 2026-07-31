@@ -4,7 +4,7 @@
 
 ## โปรเจกต์นี้คืออะไร
 
-**ฮารเหมา (hanmao)** — แอปหารค่าอาหาร/เครื่องดื่ม (bill splitting) สำหรับกลุ่มเพื่อน
+**หารเมา (hanmao)** — แอปหารค่าอาหาร/เครื่องดื่ม (bill splitting) สำหรับกลุ่มเพื่อน
 บริบทร้านไทย (VAT 7%, service charge 10%, PromptPay) ภาษา UI เป็นภาษาไทย
 
 > อยากเข้าใจ **การทำงานของแอปแบบละเอียด** (โมเดลข้อมูล, สูตรหาร, พฤติกรรมแต่ละหน้า) อ่าน [docs/SPEC.md](docs/SPEC.md)
@@ -15,8 +15,10 @@
 
 - **Expo ~57** + **React Native 0.86** + **TypeScript** (strict)
 - **expo-router** — file-based routing (โฟลเดอร์ `app/`)
-- **@react-native-async-storage/async-storage** — persist state
+- **@react-native-async-storage/async-storage** — persist state (local mode)
+- **@supabase/supabase-js** — Postgres + Realtime สำหรับวงหลายคน (group mode; ทำงานเมื่อมี env)
 - **expo-location** — เช็ก geofence พื้นที่ร้าน
+- **react-native-view-shot** + **expo-sharing** — export การ์ดสรุปเป็นรูป
 - Deploy ได้ทั้ง **iOS / Android / Web** จาก codebase เดียว
 
 ## คำสั่งที่ใช้บ่อย
@@ -37,35 +39,61 @@ npm run test:e2e:ui    # เปิด Playwright UI mode ดูทีละ step
 
 ```
 app/                     หน้าจอ (expo-router) — ต้องอยู่ที่ root ตามข้อกำหนด expo-router
-  _layout.tsx            Bottom Tabs + StoreProvider + SafeArea + ธีมมืด (แท็บ: หน้าแรก/สมาชิก/บิล/สรุป, ไอคอน emoji)
-  index.tsx              หน้าแรก dashboard — ยอดรวม + onboarding 3 ขั้น (ตอนว่าง) + ทางลัด
-  members.tsx            จัดการสมาชิก (ชื่อ, กินอะไร, เวลามา-กลับ)
+  _layout.tsx            Bottom Tabs + StoreProvider + SafeArea + ธีมมืด (แท็บ: หน้าแรก/สมาชิก/บิล/สรุป/ฉัน, ไอคอน emoji)
+  index.tsx              หน้าแรก dashboard — ยอดรวม + onboarding 3 ขั้น (ตอนว่าง) + ทางลัด + เข้าวง
+  members.tsx            จัดการสมาชิก (ชื่อ, กินอะไร, เวลามา-กลับ, พร้อมเพย์)
   bills.tsx              รายการบิล + สร้างบิลใหม่
-  bill/[id].tsx          รายละเอียดบิล (เมนู, คนจ่าย, ผู้ร่วม, ค่าบริการ) — หน้าซับซ้อนสุด
-  summary.tsx            สรุปยอดต่อคน + settle-up + เช็ก location
+  bill/[id].tsx          รายละเอียดบิล (เมนู, คนจ่าย, ผู้ร่วม, ค่าบริการ, บิลเลี้ยง) — หน้าซับซ้อนสุด
+  summary.tsx            สรุปยอดต่อคน + settle-up + checklist โอนแล้ว + แชร์รูป + เคลียร์/ปิดวง + เช็ก location
+  me.tsx                 สรุปของฉัน (ฉันต้องโอน/ต้องรับ + checklist + พร้อมเพย์)
+  group.tsx              สร้าง/จัดการวง + QR/ลิงก์เชิญ + ออกจากวง (group mode)
+  join/[code].tsx        เข้าร่วมวงจาก deep link (claim member เดิม หรือสร้างใหม่)
 src/
-  domain/types.ts        โดเมนหลัก (Member, Bill, BillItem, AppState) — เริ่มอ่านที่นี่
-  domain/split.ts        ตรรกะการหารทั้งหมด + settle-up (pure functions, ไม่มี side-effect)
+  domain/types.ts        โดเมนหลัก (Member, Bill, BillItem, AppState, Group) — เริ่มอ่านที่นี่
+  domain/split.ts        ตรรกะการหารทั้งหมด + settle-up + transferKey/allSettled/billComplete (pure)
   utils/geo.ts           haversine ระยะทางระหว่างพิกัด
-  ui/index.ts            สี (colors), baht(), timeStr(), label ภาษาไทย, confirmRemove() (ยืนยันลบ native+web)
-  data/store.tsx         React Context + useReducer-style API + persist ลง AsyncStorage (dual-mode: local/group)
+  utils/id.ts            uuid() + inviteCode()
+  ui/index.ts            สี (colors), baht(), timeStr(), label, confirmRemove(), copyText(), formatPromptPay()
+  ui/share.ts            จับภาพ View แล้ว export เป็นรูป (web: ดาวน์โหลด, native: share sheet)
+  data/store.tsx         React Context + API + persist dual-mode (AsyncStorage local / Supabase group)
+  data/supabase.ts       สร้าง Supabase client จาก env (null ถ้าไม่มี env → บังคับ local)
+  data/remote.ts         map row ↔ โดเมน + subscribeGroup (realtime) + fetchGroupState
 tests/e2e/               Playwright E2E tests (รันบน web build, local mode)
   helpers.ts             freshPage() ล้าง localStorage ให้เริ่มสะอาด + addMember()
   members.spec.ts        เทสหน้าสมาชิก (เพิ่ม/ลบ/toggle มา-กลับ/ปุ่ม disable)
   bills.spec.ts          เทสหน้าบิล (สร้างบิล/เพิ่มเมนู/เลือกคนจ่าย)
-  summary.spec.ts        เทสหน้าสรุป (แยกตามบิล: ใครร่วม/จ่ายเท่าไร/คนจ่าย)
+  summary.spec.ts        เทสหน้าสรุป (แยกตามบิล + ปุ่มดาวน์โหลดรูป disable/enable)
+  settlement.spec.ts     เทส checklist โอนแล้ว/progress/เคลียร์ทั้งหมด/sync แท็บฉัน↔สรุป
   navigation.spec.ts     เทส bottom tabs (สลับแท็บ) + onboarding หน้าแรก
 docs/                    SPEC.md, architecture.md, adr/ (บันทึกการตัดสินใจ)
-infra/supabase/          schema.sql + การตั้งค่า backend (group mode)
+infra/supabase/          schema.sql + patch-*.sql + การตั้งค่า backend (group mode)
 config/                  .env.example (เทมเพลต Supabase env)
 .claude/                 control plane: rules/ skills/ agents/ hooks/
 playwright.config.ts     config — auto `expo export` + `serve dist` ที่ port 4599 ก่อนรันเทส
 ```
 
+## ทีม agent (แบ่งงานตามขอบเขตไฟล์)
+
+งานหลายเลเยอร์ → สั่ง **`hanmao-lead`** ให้แตกงานแล้วกระจายให้ลูกทีมทำขนานกัน; งานเลเยอร์เดียว → สั่งตัวที่ตรงขอบเขตไปตรง ๆ
+
+| agent | ขอบเขต |
+|---|---|
+| `hanmao-lead` | หัวหน้าทีม — แตกงาน/กระจาย/รวมผล (ตัวเดียวที่ delegate ต่อได้) |
+| `hanmao-domain` | `src/domain/**` — สูตรหาร, โมเดล |
+| `hanmao-frontend` | `app/**`, `src/ui/**` — หน้าจอ |
+| `hanmao-data` | `src/data/**`, `infra/supabase/**` — store, persist, SQL |
+| `hanmao-test` | `tests/**` — Playwright E2E |
+| `hanmao-docs` | ไฟล์ `.md` — เอกสาร |
+| `hanmao-reviewer` | อ่านเท่านั้น — รัน tsc/e2e + ตรวจกฎ |
+
+ลำดับพึ่งพา: `domain`+`data` (ขนานกันได้) → `frontend` → `test` → `reviewer` → `docs`
+รายละเอียด + วิธีเพิ่ม agent: [.claude/agents/README.md](.claude/agents/README.md)
+
 ## โมเดลข้อมูล (สำคัญ — อ่านให้เข้าใจก่อนแก้ logic)
 
-- **Member** มี `consumes: 'both' | 'food' | 'drink'` (กินอะไร) และ `arrivedAt`/`leftAt` (epoch ms, null = อยู่ตลอด)
-- **Bill** มี `category` (food/drink/mixed), `splitMode`, `items[]`, `memberIds[]`, `paidById`, และ service/vat/discount
+- **Member** มี `consumes: 'both' | 'food' | 'drink'` (กินอะไร), `arrivedAt`/`leftAt` (epoch ms, null = อยู่ตลอด), `promptPay?`, `userId?`
+- **Bill** มี `category` (food/drink/mixed), `splitMode`, `items[]`, `memberIds[]`, `paidById`, `isTreat?` (บิลเลี้ยง), และ service/vat/discount
+- **AppState** มี `settlements: string[]` (รายการโอนที่ติ๊ก "โอนแล้ว" key `${fromId}>${toId}`) — ดู `transferKey()`/`allSettled()` ใน split.ts
 - **สำคัญ**: `paidById` = คนออกเงินบิลนั้น **แต่ละบิลอาจคนละคน** — เป็น requirement หลัก อย่าทำหาย
 - ฟิลด์ `*Ids` ที่เป็น array ว่าง มีความหมายพิเศษ = "ทุกคนที่เข้าเงื่อนไข":
   - `bill.memberIds` ว่าง → ทุกคนที่ `consumes` ตรงกับ `category`
@@ -108,6 +136,6 @@ playwright.config.ts     config — auto `expo export` + `serve dist` ที่ 
 
 ## ยังไม่ได้ทำ (backlog — ดูราย­ละเอียดใน README.md)
 
-แชร์ลิงก์บิล real-time · สแกนใบเสร็จ OCR · geofence จับเวลาอัตโนมัติ · QR PromptPay · กลุ่มเพื่อนประจำ + ประวัติ
+สแกนใบเสร็จ OCR · geofence จับเวลาอัตโนมัติ · QR PromptPay จากยอดจริง · กลุ่มเพื่อนประจำ + ประวัติ · login เต็มรูป + presence (Phase 2)
 
-ปัจจุบันยังไม่มี backend — state เก็บ local (AsyncStorage) อย่างเดียว
+state เป็น **dual-mode**: local (AsyncStorage) เป็นค่าเริ่ม; group (Supabase real-time) เมื่อเข้าร่วมวงและตั้ง env แล้ว

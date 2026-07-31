@@ -5,7 +5,7 @@ import { baht, colors } from '../src/ui';
 import { useStore } from '../src/data/store';
 
 export default function Home() {
-  const { state } = useStore();
+  const { state, mode, group, remoteEnabled } = useStore();
   const router = useRouter();
   const { grandTotal } = computeTotals(state);
   const here = state.members.filter((m) => !m.leftAt).length;
@@ -23,6 +23,31 @@ export default function Home() {
           {state.members.length} คน · ยังอยู่ {here} · {state.bills.length} บิล
         </Text>
       </View>
+
+      {/* แถบวง: โชว์ชื่อวงถ้าอยู่ในวง หรือชวนสร้าง/เข้าร่วมวงถ้ายังไม่มี */}
+      {remoteEnabled && (
+        <Pressable
+          style={s.groupBar}
+          onPress={() => router.push('/group' as never)}
+          accessibilityRole="button"
+          accessibilityLabel={
+            mode === 'group' && group ? `อยู่ในวง ${group.name} แตะเพื่อดูรายละเอียด` : 'สร้างหรือเข้าร่วมวงหลายคน'
+          }
+        >
+          <Text style={s.groupIcon}>{mode === 'group' ? '🟢' : '👥'}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.groupTitle}>
+              {mode === 'group' && group ? group.name : 'หารร่วมกันหลายคน'}
+            </Text>
+            <Text style={s.groupDesc}>
+              {mode === 'group'
+                ? 'อยู่ในวง · แตะเพื่อดู QR/ลิงก์เชิญ'
+                : 'สร้างวง แล้วชวนเพื่อนด้วย QR หรือลิงก์'}
+            </Text>
+          </View>
+          <Text style={s.chevron}>›</Text>
+        </Pressable>
+      )}
 
       {/* onboarding: แนะนำ 3 ขั้นสำหรับผู้ใช้ใหม่ */}
       {isNew && (
@@ -131,6 +156,19 @@ const s = StyleSheet.create({
   heroLabel: { color: colors.sub, fontSize: 14 },
   heroValue: { color: colors.text, fontSize: 40, fontWeight: '800', marginVertical: 4 },
   heroSub: { color: colors.sub, fontSize: 13 },
+  groupBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+  },
+  groupIcon: { fontSize: 22 },
+  groupTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  groupDesc: { color: colors.sub, fontSize: 12, marginTop: 2 },
   onboard: {
     backgroundColor: colors.card,
     borderRadius: 16,

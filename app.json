@@ -30,7 +30,8 @@
         {
           "locationWhenInUsePermission": "ใช้ตำแหน่งเพื่อบันทึกว่าใครยังอยู่ในพื้นที่ร้าน"
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

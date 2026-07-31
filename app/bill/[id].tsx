@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { billMembers, computeBill } from '../../src/domain/split';
+import { billComplete, billMembers, computeBill } from '../../src/domain/split';
 import { SplitMode } from '../../src/domain/types';
 import { baht, colors, confirmRemove, consumesLabel, splitModeLabel } from '../../src/ui';
 import { useStore } from '../../src/data/store';
@@ -27,6 +27,8 @@ export default function BillDetail() {
 
   const bd = computeBill(bill, store.state.members);
   const eligible = billMembers(bill, store.state.members);
+  const complete = billComplete(bill);
+  const hasPricedItem = bill.items.some((it) => it.price > 0);
 
   const addItem = () => {
     const price = parseFloat(itemPrice);
@@ -51,6 +53,17 @@ export default function BillDetail() {
         placeholderTextColor={colors.sub}
       />
 
+      {/* เตือนเมื่อบิลยังไม่สมบูรณ์ (ไม่เข้าสรุปจนกว่าจะครบ) */}
+      {!complete && (
+        <View style={s.warnBox} accessibilityRole="alert">
+          <Text style={s.warnTitle}>บิลนี้ยังไม่เข้าสรุป</Text>
+          <Text style={s.warnText}>
+            {!bill.paidById && '• ต้องเลือกคนออกเงิน\n'}
+            {!hasPricedItem && '• ต้องมีเมนูอย่างน้อย 1 รายการที่มีราคา'}
+          </Text>
+        </View>
+      )}
+
       {/* วิธีหาร */}
       <Text style={s.section}>วิธีหาร</Text>
       <View style={s.chips}>
@@ -67,8 +80,10 @@ export default function BillDetail() {
         ))}
       </View>
 
-      {/* คนจ่ายบิลนี้ */}
-      <Text style={s.section}>ใครออกเงินบิลนี้</Text>
+      {/* คนจ่ายบิลนี้ (จำเป็น) */}
+      <Text style={s.section}>
+        ใครออกเงินบิลนี้ <Text style={s.required}>*</Text>
+      </Text>
       <View style={s.chips}>
         {store.state.members.map((m) => (
           <Pressable
@@ -77,12 +92,37 @@ export default function BillDetail() {
               store.updateBill(bill.id, { paidById: bill.paidById === m.id ? null : m.id })
             }
             style={[s.chip, bill.paidById === m.id && s.chipActive]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: bill.paidById === m.id }}
+            accessibilityLabel={`คนออกเงิน ${m.name}`}
           >
             <Text style={[s.chipText, bill.paidById === m.id && s.chipTextActive]}>{m.name}</Text>
           </Pressable>
         ))}
         {store.state.members.length === 0 && <Text style={s.hint}>เพิ่มสมาชิกก่อน</Text>}
       </View>
+
+      {/* บิลเลี้ยง: คนจ่ายรับผิดชอบยอดเต็ม คนอื่นจ่าย 0 */}
+      <Pressable
+        style={[s.treatRow, bill.isTreat && s.treatRowActive]}
+        onPress={() => store.updateBill(bill.id, { isTreat: !bill.isTreat })}
+        disabled={!bill.paidById}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: !!bill.isTreat, disabled: !bill.paidById }}
+        accessibilityLabel="บิลนี้คนจ่ายเลี้ยง"
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[s.treatTitle, !bill.paidById && { opacity: 0.4 }]}>🎁 คนจ่ายเลี้ยง</Text>
+          <Text style={[s.treatDesc, !bill.paidById && { opacity: 0.4 }]}>
+            {bill.paidById
+              ? `${store.state.members.find((m) => m.id === bill.paidById)?.name ?? ''} จ่ายเต็ม คนอื่นไม่ต้องหาร`
+              : 'เลือกคนออกเงินก่อน'}
+          </Text>
+        </View>
+        <View style={[s.toggle, bill.isTreat && s.toggleOn]}>
+          <View style={[s.knob, bill.isTreat && s.knobOn]} />
+        </View>
+      </Pressable>
 
       {/* ใครร่วมบิลนี้ (เผื่อมาทีหลัง/กลับก่อน) */}
       <Text style={s.section}>ใครร่วมบิลนี้</Text>
@@ -265,7 +305,45 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   section: { color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 12 },
+  required: { color: colors.danger, fontWeight: '800' },
   hint: { color: colors.sub, fontSize: 12 },
+  warnBox: {
+    backgroundColor: colors.cardAlt,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.food,
+    padding: 12,
+    gap: 4,
+  },
+  warnTitle: { color: colors.food, fontSize: 14, fontWeight: '800' },
+  warnText: { color: colors.sub, fontSize: 13, lineHeight: 19 },
+  treatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginTop: 4,
+  },
+  treatRowActive: { borderColor: colors.primary },
+  treatTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  treatDesc: { color: colors.sub, fontSize: 12, marginTop: 2 },
+  toggle: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.cardAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.sub },
+  knobOn: { backgroundColor: '#fff', alignSelf: 'flex-end' },
   chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {
     paddingHorizontal: 14,

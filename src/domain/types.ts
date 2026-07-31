@@ -1,4 +1,4 @@
-// โดเมนหลักของแอปหารค่าอาหาร/เครื่องดื่ม (ฮารเหมา)
+// โดเมนหลักของแอปหารค่าอาหาร/เครื่องดื่ม (หารเมา)
 
 /** ประเภทที่คนคนหนึ่งจะร่วมจ่าย */
 export type Consumes = 'both' | 'food' | 'drink';
@@ -13,6 +13,18 @@ export type Member = {
   arrivedAt: number | null;
   /** เวลากลับ (epoch ms) — null = ยังอยู่ */
   leftAt: number | null;
+  /** auth uid ที่ claim member คนนี้ (group mode); null = ยังไม่มีใคร claim */
+  userId?: string | null;
+  /** พร้อมเพย์ (เบอร์มือถือ 10 หลัก หรือ เลขบัตร ปชช. 13 หลัก) ไว้ให้ copy ตอนโอน; null = ไม่ระบุ */
+  promptPay?: string | null;
+};
+
+/** วง (กลุ่มหารเงินหนึ่งครั้ง) — มีเฉพาะ group mode */
+export type Group = {
+  id: string;
+  name: string;
+  /** โค้ดเชิญสำหรับ invite link / QR */
+  inviteCode: string;
 };
 
 /** หมวดของบิล — ใช้จับคู่กับ consumes ของสมาชิก */
@@ -49,6 +61,8 @@ export type Bill = {
   memberIds: string[];
   /** ใครเป็นคนออกเงินบิลนี้ (member id) — แต่ละบิลอาจคนละคน; null = ยังไม่ระบุ */
   paidById: string | null;
+  /** บิลนี้คนจ่ายเลี้ยง = คนจ่ายรับผิดชอบยอดเต็ม คนอื่นจ่าย 0 */
+  isTreat?: boolean;
   /** ส่วนลดเป็นจำนวนเงิน (บาท) */
   discount: number;
   /** service charge เป็น % เช่น 10 */
@@ -63,4 +77,9 @@ export type AppState = {
   bills: Bill[];
   /** พิกัดพื้นที่ร้าน (ไว้เช็ก geofence) */
   venue: { lat: number; lng: number; radiusM: number } | null;
+  /**
+   * รายการโอนที่ทำเสร็จแล้ว (ติ๊ก "โอนแล้ว/จ่ายแล้ว")
+   * เก็บเป็น key รูปแบบ `${fromId}>${toId}` — ดู transferKey() ใน split.ts
+   */
+  settlements: string[];
 };

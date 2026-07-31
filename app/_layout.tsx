@@ -36,7 +36,7 @@ export default function RootLayout() {
           <Tabs.Screen
             name="index"
             options={{
-              title: 'ฮารเหมา',
+              title: 'หารเมา',
               tabBarLabel: 'หน้าแรก',
               tabBarIcon: ({ color }) => <TabIcon icon="🏠" color={color} />,
               tabBarAccessibilityLabel: 'หน้าแรก ภาพรวมยอดรวม',
@@ -69,8 +69,20 @@ export default function RootLayout() {
               tabBarAccessibilityLabel: 'สรุปหารเงิน ยอดต่อคนและการโอน',
             }}
           />
+          <Tabs.Screen
+            name="me"
+            options={{
+              title: 'สรุปของฉัน',
+              tabBarLabel: 'ฉัน',
+              tabBarIcon: ({ color }) => <TabIcon icon="🙋" color={color} />,
+              tabBarAccessibilityLabel: 'ฉัน สรุปเฉพาะของคุณ',
+            }}
+          />
           {/* หน้ารายละเอียดบิล เข้าจากแท็บบิล ไม่ต้องโชว์เป็น tab */}
           <Tabs.Screen name="bill/[id]" options={{ href: null, title: 'รายละเอียดบิล' }} />
+          {/* หน้าวง (หลายคน) + เข้าร่วมผ่านลิงก์/QR — เข้าจากหน้าแรก ไม่ต้องโชว์เป็น tab */}
+          <Tabs.Screen name="group" options={{ href: null, title: 'วงหารเงิน' }} />
+          <Tabs.Screen name="join/[code]" options={{ href: null, title: 'เข้าร่วมวง' }} />
         </Tabs>
       </StoreProvider>
     </SafeAreaProvider>

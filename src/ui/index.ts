@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { Alert, Platform } from 'react-native';
 
 // โทนสี + helper แสดงผลที่ใช้ร่วมกันทุกหน้า
@@ -59,4 +60,33 @@ export function confirmRemove(name: string, onConfirm: () => void) {
     { text: 'ยกเลิก', style: 'cancel' },
     { text: 'ลบ', style: 'destructive', onPress: onConfirm },
   ]);
+}
+
+/** คัดลอกข้อความลงคลิปบอร์ด (รองรับทั้ง native และ web) */
+export async function copyText(text: string): Promise<void> {
+  await Clipboard.setStringAsync(text);
+}
+
+/** เหลือเฉพาะตัวเลขจากที่ผู้ใช้พิมพ์ (ตัดช่องว่าง/ขีด) */
+export function digitsOnly(v: string): string {
+  return v.replace(/\D/g, '');
+}
+
+/**
+ * ตรวจว่าเป็นพร้อมเพย์ที่ใช้ได้ไหม: เบอร์มือถือ 10 หลัก หรือ เลขบัตร ปชช. 13 หลัก
+ * (ยอมรับค่าว่าง = ไม่ระบุ)
+ */
+export function isValidPromptPay(v: string | null | undefined): boolean {
+  if (!v) return true;
+  const d = digitsOnly(v);
+  return d.length === 10 || d.length === 13;
+}
+
+/** จัดรูปพร้อมเพย์ให้อ่านง่าย: เบอร์ 0XX-XXX-XXXX, บัตร X-XXXX-XXXXX-XX-X */
+export function formatPromptPay(v: string | null | undefined): string {
+  if (!v) return '';
+  const d = digitsOnly(v);
+  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  if (d.length === 13) return `${d.slice(0, 1)}-${d.slice(1, 5)}-${d.slice(5, 10)}-${d.slice(10, 12)}-${d.slice(12)}`;
+  return d;
 }

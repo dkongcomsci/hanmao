@@ -46,4 +46,32 @@ test.describe('หน้าสรุป (summary)', () => {
     await expect(page.getByText('แยกตามบิล')).toBeVisible();
     await expect(page.getByText('ยังไม่มีบิล')).toBeVisible();
   });
+
+  test('ปุ่มดาวน์โหลดรูป: disable เมื่อยังไม่มีข้อมูล + enable เมื่อมีสรุป', async ({ page }) => {
+    // ยังไม่มีข้อมูล → ปุ่มต้อง disabled
+    await freshPage(page, '/summary');
+    const shareBtn = page.getByRole('button', { name: 'ดาวน์โหลดรูปสรุป' });
+    await expect(shareBtn).toBeVisible();
+    await expect(shareBtn).toBeDisabled();
+
+    // เตรียมสมาชิก + บิลให้มีสรุป
+    await page.goto('/members');
+    await page.waitForLoadState('networkidle');
+    await addMember(page, 'แดง');
+    await addMember(page, 'ดำ');
+    await page.goto('/bills');
+    await page.waitForLoadState('networkidle');
+    await page.getByPlaceholder(/ชื่อบิล/).fill('บิลหมูกระทะ');
+    await page.getByText(/สร้างบิล|เพิ่มบิล/).first().click();
+    await expect(page.getByPlaceholder('ชื่อเมนู')).toBeVisible();
+    await page.getByPlaceholder('ชื่อเมนู').fill('หมู');
+    await page.getByPlaceholder('ราคา').fill('100');
+    await page.getByText('+', { exact: true }).click();
+    await page.getByText('แดง').first().click();
+
+    // กลับหน้าสรุป → ปุ่มต้อง enable
+    await page.goto('/summary');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: 'ดาวน์โหลดรูปสรุป' })).toBeEnabled();
+  });
 });

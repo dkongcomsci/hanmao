@@ -8,23 +8,26 @@ import {
   View,
 } from 'react-native';
 import { Consumes } from '../src/domain/types';
-import { colors, confirmRemove, consumesLabel, timeStr } from '../src/ui';
+import { colors, confirmRemove, consumesLabel, formatPromptPay, isValidPromptPay, timeStr } from '../src/ui';
 import { useStore } from '../src/data/store';
 
 const OPTIONS: Consumes[] = ['both', 'food', 'drink'];
 
 export default function Members() {
-  const { state, addMember, removeMember, updateMember, toggleArrived, toggleLeft } = useStore();
+  const { state, addMember, updateMember, removeMember, toggleArrived, toggleLeft } = useStore();
   const [name, setName] = useState('');
   const [consumes, setConsumes] = useState<Consumes>('both');
+  const [promptPay, setPromptPay] = useState('');
 
-  const canAdd = name.trim().length > 0;
+  const ppValid = isValidPromptPay(promptPay);
+  const canAdd = name.trim().length > 0 && ppValid;
 
   const submit = () => {
     if (!canAdd) return;
-    addMember(name, consumes);
+    addMember(name, consumes, promptPay.trim() || null);
     setName('');
     setConsumes('both');
+    setPromptPay('');
   };
 
   return (
@@ -47,6 +50,17 @@ export default function Members() {
             <Chip key={o} label={consumesLabel[o]} active={consumes === o} onPress={() => setConsumes(o)} />
           ))}
         </View>
+        <Text style={s.fieldLabel}>พร้อมเพย์ (ไม่บังคับ)</Text>
+        <TextInput
+          value={promptPay}
+          onChangeText={setPromptPay}
+          placeholder="เบอร์มือถือ หรือ เลขบัตร ปชช."
+          placeholderTextColor={colors.sub}
+          keyboardType="number-pad"
+          style={[s.input, !ppValid && s.inputError]}
+          accessibilityLabel="พร้อมเพย์ เบอร์มือถือหรือเลขบัตรประชาชน"
+        />
+        {!ppValid && <Text style={s.errorText}>ต้องเป็นเบอร์มือถือ 10 หลัก หรือ เลขบัตร 13 หลัก</Text>}
         <Pressable
           style={[s.addBtn, !canAdd && s.addBtnDisabled]}
           onPress={submit}
@@ -86,6 +100,10 @@ export default function Members() {
             <Text style={s.time}>
               มา {timeStr(m.arrivedAt)} · กลับ {timeStr(m.leftAt)}
             </Text>
+            <PromptPayEdit
+              value={m.promptPay ?? ''}
+              onSave={(v) => updateMember(m.id, { promptPay: v || null })}
+            />
           </View>
           <View style={s.actions}>
             <TinyBtn
@@ -105,6 +123,28 @@ export default function Members() {
         </View>
       ))}
     </ScrollView>
+  );
+}
+
+/** แก้พร้อมเพย์ของสมาชิกแบบ inline (เก็บเมื่อออกจากช่อง) */
+function PromptPayEdit({ value, onSave }: Readonly<{ value: string; onSave: (v: string) => void }>) {
+  const [text, setText] = useState(value);
+  const valid = isValidPromptPay(text);
+  return (
+    <View style={{ marginTop: 6, gap: 2 }}>
+      <Text style={s.ppLabel}>พร้อมเพย์: {value ? formatPromptPay(value) : '— ยังไม่ระบุ'}</Text>
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        onEndEditing={() => valid && text.trim() !== value && onSave(text.trim())}
+        onBlur={() => valid && text.trim() !== value && onSave(text.trim())}
+        placeholder="เบอร์มือถือ / เลขบัตร ปชช."
+        placeholderTextColor={colors.sub}
+        keyboardType="number-pad"
+        style={[s.ppInput, !valid && s.inputError]}
+        accessibilityLabel="แก้พร้อมเพย์"
+      />
+    </View>
   );
 }
 
@@ -175,6 +215,17 @@ const s = StyleSheet.create({
     fontSize: 16,
   },
   fieldLabel: { color: colors.sub, fontSize: 13, fontWeight: '600' },
+  inputError: { borderWidth: 1, borderColor: colors.danger },
+  errorText: { color: colors.danger, fontSize: 12 },
+  ppLabel: { color: colors.sub, fontSize: 12 },
+  ppInput: {
+    backgroundColor: colors.cardAlt,
+    color: colors.text,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
   chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {
     paddingHorizontal: 14,

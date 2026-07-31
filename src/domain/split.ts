@@ -90,7 +90,23 @@ export function computeBill(bill: Bill, members: Member[]): BillBreakdown {
   const perMember = new Map<string, number>();
   for (const [id, amt] of raw) perMember.set(id, amt * factor);
 
+  // บิลเลี้ยง: คนจ่ายรับผิดชอบยอดเต็ม คนอื่นเป็น 0
+  if (bill.isTreat && bill.paidById) {
+    for (const id of perMember.keys()) perMember.set(id, 0);
+    perMember.set(bill.paidById, total);
+  }
+
   return { perMember, subtotal, service, vat, discount: bill.discount, total };
+}
+
+/**
+ * บิลสมบูรณ์พอจะนำเข้าคำนวณสรุปไหม
+ * ต้องมี (1) คนจ่าย และ (2) อย่างน้อย 1 เมนูที่มีราคา > 0
+ */
+export function billComplete(bill: Bill): boolean {
+  const hasPayer = bill.paidById != null;
+  const hasPricedItem = bill.items.some((it) => it.price > 0);
+  return hasPayer && hasPricedItem;
 }
 
 /** รวมยอดทุกบิล -> ยอดที่แต่ละคนต้องจ่ายรวม */
@@ -101,6 +117,7 @@ export function computeTotals(state: AppState): {
   const perMember = new Map<string, number>();
   let grandTotal = 0;
   for (const bill of state.bills) {
+    if (!billComplete(bill)) continue; // บิลไม่สมบูรณ์ไม่เข้าสรุป
     const b = computeBill(bill, state.members);
     grandTotal += b.total;
     for (const [id, amt] of b.perMember) {
@@ -122,6 +139,7 @@ export function computeNetBalances(state: AppState): Map<string, number> {
   for (const m of state.members) net.set(m.id, 0);
 
   for (const bill of state.bills) {
+    if (!billComplete(bill)) continue; // บิลไม่สมบูรณ์ไม่เข้าสรุป
     const b = computeBill(bill, state.members);
     // ส่วนที่แต่ละคนต้องรับผิดชอบ -> ลบออก
     for (const [id, amt] of b.perMember) {
@@ -136,6 +154,18 @@ export function computeNetBalances(state: AppState): Map<string, number> {
 }
 
 export type Transfer = { fromId: string; toId: string; amount: number };
+
+/** key ประจำรายการโอน (ใครโอนให้ใคร) ไว้จำสถานะ "โอนแล้ว" */
+export function transferKey(t: Pick<Transfer, 'fromId' | 'toId'>): string {
+  return `${t.fromId}>${t.toId}`;
+}
+
+/** จ่ายครบทุกคนหรือยัง: มีรายการโอน และทุกรายการถูกติ๊ก "โอนแล้ว" */
+export function allSettled(transfers: Transfer[], settlements: string[]): boolean {
+  if (transfers.length === 0) return false;
+  const done = new Set(settlements);
+  return transfers.every((t) => done.has(transferKey(t)));
+}
 
 /** จับคู่ว่าใครควรโอนให้ใคร โดยให้จำนวนการโอนน้อยที่สุด (greedy settle-up) */
 export function settleUp(state: AppState): Transfer[] {

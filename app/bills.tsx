@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { computeBill } from '../src/domain/split';
+import { billComplete, computeBill } from '../src/domain/split';
 import { Bill } from '../src/domain/types';
 import { baht, categoryLabel, colors, splitModeLabel } from '../src/ui';
 import { useStore } from '../src/data/store';
@@ -71,22 +71,27 @@ export default function Bills() {
       {state.bills.map((b) => {
         const bd = computeBill(b, state.members);
         const payer = state.members.find((m) => m.id === b.paidById);
+        const complete = billComplete(b);
         return (
           <Pressable
             key={b.id}
-            style={s.card}
+            style={[s.card, !complete && s.cardIncomplete]}
             onPress={() => router.push(`/bill/${b.id}` as never)}
             accessibilityRole="button"
-            accessibilityLabel={`บิล ${b.name} ยอดรวม ${baht(bd.total)} แตะเพื่อดูรายละเอียด`}
+            accessibilityLabel={`บิล ${b.name} ยอดรวม ${baht(bd.total)}${complete ? '' : ' ยังไม่สมบูรณ์'} แตะเพื่อดูรายละเอียด`}
           >
             <View style={s.cardTop}>
-              <Text style={s.cardName}>{b.name}</Text>
+              <Text style={s.cardName}>
+                {b.name}
+                {b.isTreat ? ' 🎁' : ''}
+              </Text>
               <Text style={s.cardTotal}>{baht(bd.total)}</Text>
             </View>
             <Text style={s.cardMeta}>
               {categoryLabel[b.category]} · {splitModeLabel[b.splitMode]} · {b.items.length} เมนู
             </Text>
             <Text style={s.cardMeta}>คนจ่าย: {payer ? payer.name : '— ยังไม่ระบุ'}</Text>
+            {!complete && <Text style={s.incompleteTag}>⚠️ ยังไม่เข้าสรุป — แตะเพื่อแก้ให้ครบ</Text>}
           </Pressable>
         );
       })}
@@ -140,8 +145,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  cardIncomplete: { borderColor: colors.food },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardName: { color: colors.text, fontSize: 18, fontWeight: '700' },
   cardTotal: { color: colors.primary, fontSize: 18, fontWeight: '800' },
   cardMeta: { color: colors.sub, fontSize: 13 },
+  incompleteTag: { color: colors.food, fontSize: 12, fontWeight: '700', marginTop: 4 },
 });
