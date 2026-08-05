@@ -76,7 +76,7 @@ npm run android   # เปิดบน Android emulator
 
 ## Deploy ขึ้น public ฟรี (Netlify)
 
-> เว็บที่ deploy แล้ว: https://velvety-blancmange-38d0b7.netlify.app/
+> เว็บที่ deploy แล้ว (เปิด group mode + realtime ครบ): https://velvety-blancmange-38d0b7.netlify.app/
 
 เว็บของหารเมาเป็น **static export** (`expo export --platform web` → โฟลเดอร์ `dist/`) จึง host ฟรีได้บน Netlify
 Netlify **build + host ให้บน server ของเขาเอง** — ไม่ต้องเปิดเครื่องเราค้างไว้ ปิดเครื่องแล้วเว็บยังออนไลน์
@@ -94,9 +94,11 @@ Netlify **build + host ให้บน server ของเขาเอง** — 
 3. **เชื่อม Netlify**: https://netlify.com → Add new site → Import from Git → เลือก repo
    — build settings อ่านจาก `netlify.toml` อัตโนมัติ ไม่ต้องกรอก
 4. **ใส่ env** (ถ้าเปิด group mode): Site configuration → Environment variables → เพิ่ม
-   `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` จากขั้น 1
+   `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` จากขั้น 1 (ชื่อ Key ต้องขึ้นต้น `EXPO_PUBLIC_` เป๊ะ)
    > anon key ถูก inline เข้า bundle เป็น **public โดยตั้งใจ** — ความปลอดภัยพึ่ง RLS (ต้องรัน `patch-004` แล้ว)
+   > ⚠️ Expo inline env **ตอน build** — เพิ่ม/แก้ env แล้วต้อง **re-deploy** (Deploys → Trigger deploy) ค่าถึงจะเข้า bundle
 5. **Deploy** → ได้ URL `https://<ชื่อ>.netlify.app` (auto-deploy ทุกครั้งที่ push)
+   ยืนยัน group mode: แท็บ **"วง"** โผล่ + สร้างวง/เข้าวงผ่านลิงก์เชิญได้
 6. **ปิดท้าย** (group mode): กลับไป Supabase → Authentication → URL Configuration →
    เพิ่ม URL Netlify เข้า Site URL
 
