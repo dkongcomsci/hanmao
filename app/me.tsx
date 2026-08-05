@@ -47,7 +47,7 @@ export default function Me() {
     setPicking(true);
     claimMember(memberId)
       // เช่น ชื่อนี้มีคนอื่น claim ไปแล้ว — ต้องบอกเหตุผล ไม่ใช่กดแล้วเงียบ
-      .catch((e) => notify('บันทึกตัวตนในวงไม่สำเร็จ', friendlyError(e, 'ลองใหม่อีกครั้ง')))
+      .catch((e) => notify('บันทึกตัวตนในกลุ่มไม่สำเร็จ', friendlyError(e, 'ลองใหม่อีกครั้ง')))
       .finally(() => setPicking(false));
   };
 

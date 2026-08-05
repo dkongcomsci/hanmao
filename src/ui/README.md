@@ -9,7 +9,7 @@
   - แสดงผล: `baht()`, `timeStr()`; a11y: `a11y(role, state?)`
   - label ภาษาไทย: `consumesLabel`, `categoryLabel`, `splitModeLabel`
   - ยืนยัน/แจ้งเตือน: `confirmRemove(name, onConfirm)` (การลบ), `confirmAction({ title, message, confirmLabel, onConfirm })`
-    (ยืนยันที่ต้องเขียนข้อความเอง เช่น ปิดวง), `notify(title, message?)`
+    (ยืนยันที่ต้องเขียนข้อความเอง เช่น ปิดกลุ่ม), `notify(title, message?)`
   - error: `friendlyError(e, fallback)` แปลง error เป็นข้อความไทยที่ผู้ใช้อ่านรู้เรื่อง
   - อื่น ๆ: `copyText()`, `digitsOnly()`, `isValidPromptPay()`, `formatPromptPay()`
 - `theme.ts` — hook `useTheme()` (ห่อ `useStore`) คืน `{ colors: Palette; theme; toggleTheme; setTheme }`

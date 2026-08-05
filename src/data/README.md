@@ -13,7 +13,7 @@
 | คีย์ | เก็บอะไร |
 |---|---|
 | `hanmao:state:v1` | `AppState` ของ local mode |
-| `hanmao:session:v1` | `{ groupId, myMemberId }` — กลับเข้าวงเดิมอัตโนมัติตอนเปิดแอป |
+| `hanmao:session:v1` | `{ groupId, myMemberId }` — กลับเข้ากลุ่มเดิมอัตโนมัติตอนเปิดแอป |
 | `hanmao:me:v1` | "ฉันคือ member ไหน" ของ local mode |
 | `hanmao:theme:v1` | ธีม `'light'`/`'dark'` — **device preference** ไม่อยู่ใน `AppState` ไม่ sync ขึ้น server เขียนทุกโหมด (default มืด, ดู [ADR 0007](../../docs/adr/0007-runtime-theme-switch.md)) |
 

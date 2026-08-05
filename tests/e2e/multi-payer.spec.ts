@@ -3,7 +3,7 @@ import { addItem, addMember, createBill, freshPage, pickMe, pickPayer } from './
 
 /**
  * `paidById` ต่างกันคนละบิล = requirement หลักของโปรเจกต์ (ดู CLAUDE.md)
- * เทสชุดนี้พิสูจน์ว่ายอดสรุป/settle-up คิดจาก "คนออกเงินของแต่ละบิล" จริง ไม่ใช่คนเดียวทั้งวง
+ * เทสชุดนี้พิสูจน์ว่ายอดสรุป/settle-up คิดจาก "คนออกเงินของแต่ละบิล" จริง ไม่ใช่คนเดียวทั้งกลุ่ม
  *
  * เลขที่คาดหวัง (สมาชิก 2 คน consumes=both, บิลหมวดอาหาร, หารเท่ากัน):
  *   บิล A 100฿ จ่ายโดยแดง → แดง 50, ดำ 50
@@ -155,7 +155,7 @@ test.describe('บิลหลายใบ คนออกเงินคนล�
     await page.getByRole('checkbox', { name: 'ดำ โอนให้ แดง แล้ว' }).click();
     await expect(page.getByText('โอนแล้ว 1/1 รายการ')).toBeVisible();
     await expect(page.getByText('จ่ายครบทุกคนแล้ว!')).toBeVisible();
-    // local mode ป้ายปุ่มคือ "เคลียร์ทั้งหมด" (ไม่ใช่ "ปิดวง"/"ออกจากวง")
+    // local mode ป้ายปุ่มคือ "เคลียร์ทั้งหมด" (ไม่ใช่ "ปิดกลุ่ม"/"ออกจากกลุ่ม")
     await expect(page.getByText('เคลียร์ทั้งหมด')).toBeVisible();
   });
 });

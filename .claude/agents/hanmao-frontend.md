@@ -22,7 +22,7 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 - **เวลา**: หา `const now = Date.now()` **ครั้งเดียวต่อ render** แล้วส่งเป็น `asOf` เข้าทุก call ของโดเมน (`computeBill`/`computeTotals`/`computeNetBalances`/`settleUp`) — ห้ามให้แต่ละ call อ่านนาฬิกาเอง ไม่งั้นยอดต่อคนกับรายการโอนในหน้าเดียวไม่ตรงกัน (ดู [.claude/rules/domain.md](../rules/domain.md))
 - **key ของรายการโอน** ใช้ `transferKey(t)` เท่านั้น ห้ามต่อสตริงเอง; เช็ก "เคลียร์หมด" ด้วย `nothingOwed()`
 - **ปุ่มมีเงื่อนไข** → `disabled` + หรี่ opacity เมื่อยังกดไม่ได้ ห้ามปล่อยให้กดแล้วเงียบ (no-op)
-- **การลบ** → `confirmRemove(name, onConfirm)` เสมอ ห้ามลบทันที; การยืนยันที่ต้องเขียนข้อความเอง (เช่น ปิดวง/ออกจากวง) ใช้ `confirmAction({ title, message, confirmLabel, onConfirm })`
+- **การลบ** → `confirmRemove(name, onConfirm)` เสมอ ห้ามลบทันที; การยืนยันที่ต้องเขียนข้อความเอง (เช่น ปิดกลุ่ม/ออกจากกลุ่ม) ใช้ `confirmAction({ title, message, confirmLabel, onConfirm })`
 - **error ต้องบอกเหตุผลจริง** — จับ error จาก store แล้วแสดงผ่าน `friendlyError(e, fallback)` + `notify()` ห้ามกลืน error เงียบ ๆ
 - **a11y ทุกจุด** → `accessibilityRole` + `accessibilityLabel` (+ `accessibilityState` สำหรับ selected/disabled/checked); hit target ปุ่มเล็ก ≥ 40px
 - **empty state** ใช้รูปแบบเดิม: emoji + หัวข้อ + คำแนะนำว่าให้ทำอะไรต่อ (`emptyBox`/`emptyIcon`/`emptyTitle`/`emptyDesc`)

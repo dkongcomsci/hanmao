@@ -16,10 +16,10 @@
 - **Expo ~57** + **React Native 0.86** + **TypeScript** (strict)
 - **expo-router** — file-based routing (โฟลเดอร์ `app/`)
 - **@react-native-async-storage/async-storage** — persist state (local mode)
-- **@supabase/supabase-js** — Postgres + Realtime สำหรับวงหลายคน (group mode; ทำงานเมื่อมี env)
+- **@supabase/supabase-js** — Postgres + Realtime สำหรับกลุ่มหลายคน (group mode; ทำงานเมื่อมี env)
 - **expo-location** — เช็ก geofence พื้นที่ร้าน
 - **react-native-view-shot** + **expo-sharing** — export การ์ดสรุปเป็นรูป
-- **react-native-qrcode-svg** + **expo-linking** — QR/ลิงก์เชิญเข้าวง (deep link `hanmao://join/<code>`)
+- **react-native-qrcode-svg** + **expo-linking** — QR/ลิงก์เชิญเข้ากลุ่ม (deep link `hanmao://join/<code>`)
 - **expo-clipboard** — คัดลอกพร้อมเพย์/ลิงก์เชิญ
 - Deploy ได้ทั้ง **iOS / Android / Web** จาก codebase เดียว
 
@@ -41,14 +41,14 @@ npx expo export --platform web   # ตรวจว่า bundle web compile ไ�
 ```
 app/                     หน้าจอ (expo-router) — ต้องอยู่ที่ root ตามข้อกำหนด expo-router
   _layout.tsx            Bottom Tabs + StoreProvider + SafeArea + ปุ่มสลับธีมบน header (แท็บ: หน้าแรก/สมาชิก/บิล/สรุป/ฉัน, ไอคอน emoji)
-  index.tsx              หน้าแรก dashboard — ยอดรวม + onboarding 3 ขั้น (ตอนว่าง) + ทางลัด + เข้าวง
-  members.tsx            จัดการสมาชิก (ชื่อ, กินอะไร, เวลามา-กลับ, พร้อมเพย์)
+  index.tsx              หน้าแรก — onboarding 3 ขั้น (แสดงเสมอ) + ปุ่มไอคอน 3 ปุ่ม (หารคนเดียว→members / หารหลายคน→group / เริ่มทำรายการใหม่=reset ผ่าน confirmAction) + แถบกลุ่มเมื่ออยู่ในกลุ่ม (ไม่มี hero ยอดรวมแล้ว)
+  members.tsx            จัดการสมาชิก (ชื่อ, กินอะไร, พร้อมเพย์—บันทึกเมื่อกดปุ่ม) — ปุ่ม "มาถึง"/"กลับ" ปิดไว้ชั่วคราว (คู่กับโหมดเวลาที่ปิดอยู่)
   bills.tsx              รายการบิล + สร้างบิลใหม่
-  bill/[id].tsx          รายละเอียดบิล (เมนู, คนจ่าย, ผู้ร่วม, ค่าบริการ, บิลเลี้ยง) — หน้าซับซ้อนสุด
-  summary.tsx            สรุปยอดต่อคน + settle-up + checklist โอนแล้ว + แชร์รูป + เคลียร์/ปิดวง + เช็ก location
+  bill/[id].tsx          รายละเอียดบิล (เมนู, คนจ่าย, ผู้ร่วม, ค่าบริการ, บิลเลี้ยง) — หน้าซับซ้อนสุด · แก้แบบ draft แล้วกด "บันทึก" (เรียก saveBill) → Modal เลือกไป bills/summary
+  summary.tsx            สรุปยอดต่อคน + settle-up + checklist โอนแล้ว + แชร์รูป + เคลียร์/ปิดกลุ่ม + เช็ก location
   me.tsx                 สรุปของฉัน (ฉันต้องโอน/ต้องรับ + checklist + พร้อมเพย์)
-  group.tsx              สร้าง/จัดการวง + QR/ลิงก์เชิญ + ออกจากวง (group mode)
-  join/[code].tsx        เข้าร่วมวงจาก deep link (claim member เดิม หรือสร้างใหม่)
+  group.tsx              สร้าง/จัดการกลุ่ม + QR/ลิงก์เชิญ + ออกจากกลุ่ม (group mode)
+  join/[code].tsx        เข้าร่วมกลุ่มจาก deep link (claim member เดิม หรือสร้างใหม่) → ผูกตัวตนสำเร็จแล้วไปหน้าสรุป (/summary)
 src/
   domain/types.ts        โดเมนหลัก (Member, Bill, BillItem, AppState, Group) — เริ่มอ่านที่นี่
   domain/split.ts        ตรรกะการหารทั้งหมด + settle-up 2 โหมด (greedy/star) + transferKey 2 รูปแบบ +
@@ -106,7 +106,7 @@ playwright.config.ts     config — auto `expo export` + เสิร์ฟ `dis
   **`transferKey` มี 2 รูปแบบ ห้ามประกอบเองเด็ดขาด**:
   ยอดนิ่ง = `` `${fromId}>${toId}@${ยอด 2 ตำแหน่ง}` `` (ผูกทิศทาง+ยอด, [ADR 0003](docs/adr/0003-transfer-key-amount-bound.md)) ·
   ยอดลอยตามเวลา (บิลโหมด `time` + ยังมีคนไม่กลับ) = `` `${idน้อย}|${idมาก}@${stamp}` `` (ผูกคู่คน+ลายนิ้วมือข้อมูล ไม่ผูกยอด ไม่ผูกทิศ, [ADR 0006](docs/adr/0006-stable-settle-topology.md))
-  ยอดเปลี่ยน (หรือยอดหยุดลอยเพราะทุกคนกลับแล้ว) → key เดิมไม่แมตช์ = กลับเป็น "ยังไม่โอน" โดยตั้งใจ **ต้องติ๊กใหม่บนยอดปิดจริงก่อนปิดวง**
+  ยอดเปลี่ยน (หรือยอดหยุดลอยเพราะทุกคนกลับแล้ว) → key เดิมไม่แมตช์ = กลับเป็น "ยังไม่โอน" โดยตั้งใจ **ต้องติ๊กใหม่บนยอดปิดจริงก่อนปิดกลุ่ม**
   เช็ก "ไม่มีใครต้องโอนแล้ว" ด้วย `nothingOwed()` · ล้าง key ที่ยอดไม่ตรงด้วย `pruneSettlements()` (prune ได้ทุกเคสแล้ว ไม่มีข้อยกเว้นโหมด time)
 - **สำคัญ**: `paidById` = คนออกเงินบิลนั้น **แต่ละบิลอาจคนละคน** — เป็น requirement หลัก อย่าทำหาย
 - ฟิลด์ `*Ids` ที่เป็น array ว่าง มีความหมายพิเศษ = "ทุกคนที่เข้าเงื่อนไข":
@@ -120,13 +120,15 @@ playwright.config.ts     config — auto `expo export` + เสิร์ฟ `dis
 - `itemized` — หารตามผู้ร่วมของแต่ละเมนู (`item.participantIds`)
 - `time` — เฉลี่ยตามสัดส่วนเวลาที่อยู่ (ใช้ `arrivedAt`/`leftAt`)
 
+> **หมายเหตุ:** โหมด `time` **ถูกปิดใน UI ชั่วคราว** — `MODES` ใน `bill/[id].tsx` เหลือ `['equal','itemized']` และปุ่ม "มาถึง"/"กลับ" ใน `members.tsx` ถูกปิด. logic โหมด `time` (+ star/`stamp`/`amountsDrift`) ยังอยู่ครบใน `split.ts` และบิลเก่าที่เป็น `time` ยังคำนวณได้ตามเดิม — อย่าลบ logic ออก
+
 ลำดับการคิด: ยอดดิบต่อคนตามโหมด → คูณ factor รวม service+vat-discount แบบสัดส่วน
 
 `settleUp()` มี **2 โหมด** อย่าคิดว่าเป็น greedy อย่างเดียว (ตัดสินด้วย `amountsDrift(state)`):
 - ยอดนิ่ง → greedy min-transfer จาก net balance (จ่ายจริง vs ที่ต้องรับผิดชอบ)
 - ยอดลอยตามเวลา (บิลโหมด `time` ที่เข้าสรุปแล้ว + มีผู้ร่วมบิลที่ยัง `leftAt == null`) → **star**:
   ทุกคนมีเส้นเดียวกับ hub เดียว (`settleHub` เลือกจากข้อมูลผ่าน `referenceAsOf` ไม่ใช่จากนาฬิกา)
-  เพราะ greedy จับคู่จากลำดับยอดที่ลอย ⇒ คู่โอนเปลี่ยนตัวคนเอง ⇒ ติ๊ก "โอนแล้ว" หลุด ⇒ กล่อง 🎉/ปุ่มปิดวงหายเอง
+  เพราะ greedy จับคู่จากลำดับยอดที่ลอย ⇒ คู่โอนเปลี่ยนตัวคนเอง ⇒ ติ๊ก "โอนแล้ว" หลุด ⇒ กล่อง 🎉/ปุ่มปิดกลุ่มหายเอง
   ([ADR 0006](docs/adr/0006-stable-settle-topology.md))
 
 - **split.ts ต้อง pure จริง — ห้ามมี `Date.now()`**: ฟังก์ชันที่ต้องรู้ "ตอนนี้" (`computeBill`, `computeTotals`,
@@ -135,7 +137,7 @@ playwright.config.ts     config — auto `expo export` + เสิร์ฟ `dis
 - **คิดเงินบนจำนวนเต็มหน่วยสตางค์** แล้วเกลี่ยเศษแบบ largest remainder → ผลรวม net = 0 พอดี
   ห้ามใส่ threshold ลอย ๆ แบบ `0.005` กลับมา ([ADR 0002](docs/adr/0002-integer-cents-largest-remainder.md))
 - **ผลลัพธ์โดเมนห้ามขึ้นกับลำดับแถวใน array** (`state.members`/`state.bills`/`bill.items`) — สลับลำดับแล้วยอด/net/คู่โอน/key ต้องเท่าเดิมทุกทศนิยม
-  เพราะโหมดวงดึงแถวจาก Postgres ที่ลำดับไม่การันตี ⇒ ถ้าผลต่างกัน สองเครื่องจะเห็น "โอนแล้ว/ยังไม่โอน" ไม่ตรงกัน
+  เพราะโหมดกลุ่มดึงแถวจาก Postgres ที่ลำดับไม่การันตี ⇒ ถ้าผลต่างกัน สองเครื่องจะเห็น "โอนแล้ว/ยังไม่โอน" ไม่ตรงกัน
   - **ห้ามใช้ตำแหน่งแถว (index) เป็น tiebreak** — ชั้นสุดท้ายใช้รหัสสมาชิกผ่าน `byCode()`
   - **ห้ามใช้ `localeCompare` ในเลเยอร์โดเมน** (ผลต่างกันตาม locale) ใช้ `byCode()`
   - **ห้ามบวก float ตรง ๆ ในเส้นทางคิดเงิน** ใช้ `sumStable()` (เรียงค่าก่อนบวก) เพราะการบวก float ไม่ commutative
@@ -170,7 +172,7 @@ playwright.config.ts     config — auto `expo export` + เสิร์ฟ `dis
 - ปุ่มที่มีเงื่อนไข (เช่น ต้องกรอกชื่อก่อน) ให้ `disabled` + หรี่ opacity เมื่อยังทำไม่ได้ อย่าปล่อยให้กดแล้วเงียบ (no-op) — ผู้ใช้จะนึกว่าปุ่มเสีย
 - ปุ่ม/ช่องกรอกทุกจุดใส่ `accessibilityRole` + `accessibilityLabel` (และ `accessibilityState` สำหรับ selected/disabled) รองรับ screen reader; hit target ปุ่มเล็ก ≥ 40px
 - การลบ (สิ่งที่ย้อนกลับไม่ได้) ให้เรียก `confirmRemove(name, onConfirm)` จาก `src/ui/index.ts` เสมอ อย่าลบทันที;
-  การยืนยันที่ต้องเขียนข้อความเอง (ปิดวง/ออกจากวง) ใช้ `confirmAction({ title, message, confirmLabel, onConfirm })`
+  การยืนยันที่ต้องเขียนข้อความเอง (ปิดกลุ่ม/ออกจากกลุ่ม) ใช้ `confirmAction({ title, message, confirmLabel, onConfirm })`
 - error จาก store อย่ากลืนเงียบ — แสดงด้วย `friendlyError(e, fallback)` + `notify()`
 - ต้องใช้เวลาปัจจุบัน: หา `const now = Date.now()` ครั้งเดียวต่อ render แล้วส่งเป็น `asOf` เข้าฟังก์ชันโดเมนทุกตัวในหน้านั้น
 - Empty state ทุกหน้าใช้รูปแบบเดียวกัน: ไอคอน emoji + หัวข้อ + คำแนะนำว่าให้ทำอะไรต่อ (ดู `emptyBox`/`emptyIcon`/`emptyTitle`/`emptyDesc`)
@@ -178,16 +180,16 @@ playwright.config.ts     config — auto `expo export` + เสิร์ฟ `dis
 ## state เป็น dual-mode
 
 - **local** (ค่าเริ่มต้น) — persist ลง AsyncStorage/localStorage 3 คีย์: `hanmao:state:v1` (ข้อมูลแอป),
-  `hanmao:session:v1` (อยู่วงไหน + เราเป็น member ไหน), `hanmao:me:v1` ("ฉันคือใคร" ใน local mode)
-- **group** — Supabase Postgres + Realtime; เปิดใช้เมื่อมี env (`store.remoteEnabled`) และเข้าร่วมวงแล้ว
+  `hanmao:session:v1` (อยู่กลุ่มไหน + เราเป็น member ไหน), `hanmao:me:v1` ("ฉันคือใคร" ใน local mode)
+- **group** — Supabase Postgres + Realtime; เปิดใช้เมื่อมี env (`store.remoteEnabled`) และเข้าร่วมกลุ่มแล้ว
   แก้แบบ optimistic ในเครื่องก่อน แล้วยิงขึ้น server + รับ realtime มา reconcile
 - **ธีม** (สว่าง/มืด) เป็น **device preference** — persist คีย์ที่ 4 `hanmao:theme:v1` (string `'light'`/`'dark'`, default มืด, ไม่มีโหมด auto)
   แยกจาก 3 คีย์ข้างบน เขียน **ทุกโหมด** ไม่ผูก local/group, ไม่อยู่ใน `AppState`, ไม่ sync ขึ้น Supabase (schema ไม่เปลี่ยน)
   store มี `theme`/`toggleTheme()`/`setTheme(t)`; หน้าจอดึง palette ผ่าน `useTheme()` ([ADR 0007](docs/adr/0007-runtime-theme-switch.md))
-- `store.isHost` = เราเป็นผู้สร้างวงไหม (local mode = `true` เสมอ) — มีแค่ host ที่ลบวงทั้งวงได้ (บังคับที่ RLS)
+- `store.isHost` = เราเป็นผู้สร้างกลุ่มไหม (local mode = `true` เสมอ) — มีแค่ host ที่ลบกลุ่มทั้งกลุ่มได้ (บังคับที่ RLS)
 - **ต้องรัน SQL + เปิด Anonymous sign-in เองใน Supabase** ก่อน group mode ทำงาน —
   ขั้นตอนที่ต้องทำมือรวมไว้ที่ [README.md](README.md) หัวข้อ "ขั้นตอนที่ต้องทำมือ" และ [infra/supabase/README.md](infra/supabase/README.md)
 
 ## ยังไม่ได้ทำ (backlog — ดูราย­ละเอียดใน README.md)
 
-สแกนใบเสร็จ OCR · geofence จับเวลาอัตโนมัติ · QR PromptPay จากยอดจริง · กลุ่มเพื่อนประจำ + ประวัติการหาร (ปิดวง = ลบถาวร) · login เต็มรูป (link anonymous → บัญชีถาวร) + presence
+สแกนใบเสร็จ OCR · geofence จับเวลาอัตโนมัติ · QR PromptPay จากยอดจริง · กลุ่มเพื่อนประจำ + ประวัติการหาร (ปิดกลุ่ม = ลบถาวร) · login เต็มรูป (link anonymous → บัญชีถาวร) + presence

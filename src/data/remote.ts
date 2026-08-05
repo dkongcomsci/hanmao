@@ -64,7 +64,7 @@ function rowToMember(r: MemberRow): Member {
 }
 
 /**
- * ลำดับที่ใช้เรียงแถวหลายแถวที่ insert พร้อมกัน (ตอน migrate local → วง)
+ * ลำดับที่ใช้เรียงแถวหลายแถวที่ insert พร้อมกัน (ตอน migrate local → กลุ่ม)
  * คืน ISO timestamp ที่ห่างกันทีละ 1 ms ตาม index เพื่อให้ order by created_at
  * ได้ลำดับเดิมกับที่ผู้ใช้เห็นตอน local (default now() ใช้ไม่ได้ เพราะคงที่ทั้งทรานแซกชัน)
  */
@@ -193,7 +193,7 @@ type Res<T> = { data: T[] | null; error: { code?: string } | null };
 
 /**
  * ยิง select พร้อม order; ถ้า project เก่ายังไม่มีคอลัมน์ที่ใช้เรียง (42703 undefined_column
- * / PGRST204 ไม่รู้จักคอลัมน์) ให้ถอยไปดึงแบบไม่ order แทน — ดีกว่าทำให้ทั้งวงพัง
+ * / PGRST204 ไม่รู้จักคอลัมน์) ให้ถอยไปดึงแบบไม่ order แทน — ดีกว่าทำให้ทั้งกลุ่มพัง
  * ลำดับยังนิ่งอยู่เพราะ sortByTimeThenId เรียงซ้ำฝั่ง client (ตกไปเรียงตาม id)
  */
 async function selectOrdered<T>(
@@ -206,13 +206,13 @@ async function selectOrdered<T>(
   return res;
 }
 
-// ---------- fetch ทั้งวง → ประกอบเป็น AppState ----------
+// ---------- fetch ทั้งกลุ่ม → ประกอบเป็น AppState ----------
 /**
- * ประกอบ AppState ของวงจาก rows
+ * ประกอบ AppState ของกลุ่มจาก rows
  *
  * ทุก query ที่คืนหลายแถว **ต้องมี order ที่นิ่ง (deterministic)**:
  * Postgres ไม่การันตีลำดับแถวถ้าไม่ระบุ `order by` — ลำดับเปลี่ยนได้ตาม query plan/vacuum/index
- * ⇒ สองเครื่องในวงเดียวกันอาจได้ `state.members` ลำดับต่างกัน ทำให้
+ * ⇒ สองเครื่องในกลุ่มเดียวกันอาจได้ `state.members` ลำดับต่างกัน ทำให้
  *   1. รายชื่อบนจอสลับตำแหน่งเองระหว่าง refetch/realtime (กวนผู้ใช้)
  *   2. การเกลี่ยเศษสตางค์ (largest remainder ใน split.ts) ที่ tiebreak ตามลำดับรายชื่อ
  *      ได้คู่โอน/transferKey ต่างกัน → คนหนึ่งติ๊ก "โอนแล้ว" อีกคนเห็น "ยังไม่โอน"
@@ -250,11 +250,11 @@ export async function fetchGroupState(groupId: string): Promise<AppState> {
     sb.from('groups').select('venue, settlements').eq('id', groupId).single(),
   ]);
   // ทุก query ต้องเช็ก error — ถ้าปล่อยผ่านจะได้ AppState ที่ "ว่างแบบเนียน ๆ"
-  // แล้ว store จะเอาไปทับ state จริง (ข้อมูลเหมือนหายทั้งวง)
+  // แล้ว store จะเอาไปทับ state จริง (ข้อมูลเหมือนหายทั้งกลุ่ม)
   for (const res of [membersRes, billsRes, itemsRes, groupRes]) {
     if (res.error) throw res.error;
   }
-  if (!groupRes.data) throw new Error('ไม่พบวงนี้ (อาจถูกปิดไปแล้ว)');
+  if (!groupRes.data) throw new Error('ไม่พบกลุ่มนี้ (อาจถูกปิดไปแล้ว)');
 
   const itemRows = sortByTimeThenId(itemsRes.data ?? [], (r) => timeOf(r.created_at));
   const itemsByBill = new Map<string, BillItem[]>();
@@ -298,7 +298,7 @@ export async function fetchGroupState(groupId: string): Promise<AppState> {
   return { members, bills, venue, settlements };
 }
 
-/** subscribe ทุกตารางของวง แล้วเรียก onChange เมื่อมีการเปลี่ยน (store จะ refetch) */
+/** subscribe ทุกตารางของกลุ่ม แล้วเรียก onChange เมื่อมีการเปลี่ยน (store จะ refetch) */
 export function subscribeGroup(groupId: string, onChange: () => void): RealtimeChannel {
   const sb = client();
   const filter = `group_id=eq.${groupId}`;

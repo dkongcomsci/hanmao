@@ -7,19 +7,19 @@
 
 -- ---------- ตาราง ----------
 
--- วง (กลุ่มหารเงินหนึ่งครั้ง) — invite_code ใช้ในลิงก์/QR
+-- กลุ่ม (กลุ่มหารเงินหนึ่งครั้ง) — invite_code ใช้ในลิงก์/QR
 create table if not exists public.groups (
   id          uuid primary key default gen_random_uuid(),
-  name        text not null default 'วงใหม่',
+  name        text not null default 'กลุ่มใหม่',
   invite_code text not null unique,
   venue       jsonb,                          -- { lat, lng, radiusM } | null
   settlements jsonb not null default '[]',    -- string[] รายการโอนที่ติ๊ก "โอนแล้ว" (`${fromId}>${toId}@ยอด`)
-  -- ผู้สร้างวง (host) — มีสิทธิ์ลบวงทั้งวงคนเดียว; default auth.uid() → client ไม่ต้องส่งมา
+  -- ผู้สร้างกลุ่ม (host) — มีสิทธิ์ลบกลุ่มทั้งกลุ่มคนเดียว; default auth.uid() → client ไม่ต้องส่งมา
   created_by  uuid default auth.uid() references auth.users(id) on delete set null,
   created_at  timestamptz not null default now()
 );
 
--- ใครเป็นสมาชิก (auth) ของวงไหน — ใช้เป็นฐานของ RLS
+-- ใครเป็นสมาชิก (auth) ของกลุ่มไหน — ใช้เป็นฐานของ RLS
 create table if not exists public.group_participants (
   group_id  uuid not null references public.groups(id) on delete cascade,
   -- default auth.uid() → client insert แค่ group_id ได้ (ไม่ต้องส่ง user_id เอง)
@@ -28,7 +28,7 @@ create table if not exists public.group_participants (
   primary key (group_id, user_id)
 );
 
--- สมาชิกในวง (คนที่ร่วมหาร — ไม่จำเป็นต้องมี auth 1:1; host สร้างเผื่อได้)
+-- สมาชิกในกลุ่ม (คนที่ร่วมหาร — ไม่จำเป็นต้องมี auth 1:1; host สร้างเผื่อได้)
 create table if not exists public.members (
   id         uuid primary key default gen_random_uuid(),
   group_id   uuid not null references public.groups(id) on delete cascade,
@@ -85,8 +85,8 @@ create index if not exists idx_bills_group_created       on public.bills(group_i
 create index if not exists idx_bill_items_group_created  on public.bill_items(group_id, created_at, id);
 
 -- ---------- Row Level Security ----------
--- หลักการ: user เห็น/แก้ได้เฉพาะข้อมูลของวงที่ตัวเองเป็น participant
--- ทางเข้าวงมีทางเดียวคือ RPC join_group(code) — รู้ uuid ของวงเฉย ๆ เข้าไม่ได้
+-- หลักการ: user เห็น/แก้ได้เฉพาะข้อมูลของกลุ่มที่ตัวเองเป็น participant
+-- ทางเข้ากลุ่มมีทางเดียวคือ RPC join_group(code) — รู้ uuid ของกลุ่มเฉย ๆ เข้าไม่ได้
 
 alter table public.groups             enable row level security;
 alter table public.group_participants enable row level security;
@@ -107,7 +107,7 @@ as $$
   );
 $$;
 
--- helper: uid นี้เป็นผู้สร้างวงนี้ไหม (สิทธิ์ลบวง + insert participant ตรงตอนสร้าง)
+-- helper: uid นี้เป็นผู้สร้างกลุ่มนี้ไหม (สิทธิ์ลบกลุ่ม + insert participant ตรงตอนสร้าง)
 create or replace function public.is_group_creator(gid uuid)
 returns boolean
 language sql
@@ -120,9 +120,9 @@ as $$
   );
 $$;
 
--- groups: สร้างวงได้ถ้าล็อกอินแล้ว และต้องตั้งตัวเองเป็นผู้สร้าง
+-- groups: สร้างกลุ่มได้ถ้าล็อกอินแล้ว และต้องตั้งตัวเองเป็นผู้สร้าง
 -- (host ยังไม่เป็น participant ตอน insert — chicken&egg)
--- อ่าน/แก้ = สมาชิกของวง; ลบวงทั้งวง = ผู้สร้างเท่านั้น
+-- อ่าน/แก้ = สมาชิกของกลุ่ม; ลบกลุ่มทั้งกลุ่ม = ผู้สร้างเท่านั้น
 drop policy if exists groups_member_all on public.groups;
 drop policy if exists groups_insert on public.groups;
 create policy groups_insert on public.groups
@@ -138,7 +138,7 @@ create policy groups_delete on public.groups
   for delete using (created_by = auth.uid());
 
 -- policy ของ update เห็นแค่แถวใหม่ (เทียบกับค่าเดิมไม่ได้) → ใช้ trigger กันสมาชิก
--- ตั้งตัวเองเป็นผู้สร้าง (แล้วลบวงได้) หรือเปลี่ยนโค้ดเชิญของวง
+-- ตั้งตัวเองเป็นผู้สร้าง (แล้วลบกลุ่มได้) หรือเปลี่ยนโค้ดเชิญของกลุ่ม
 create or replace function public.groups_guard_immutable()
 returns trigger
 language plpgsql
@@ -150,11 +150,11 @@ begin
   if auth.uid() is null then
     return new;
   end if;
-  -- ข้อยกเว้นเดียว: วงกำพร้า (created_by null เพราะบัญชี host ถูกลบ) — สมาชิกรับเป็น host ต่อได้
-  -- ไม่งั้นวงจะลบไม่ได้ตลอดกาล; ต้องตั้งเป็นตัวเองเท่านั้น
+  -- ข้อยกเว้นเดียว: กลุ่มกำพร้า (created_by null เพราะบัญชี host ถูกลบ) — สมาชิกรับเป็น host ต่อได้
+  -- ไม่งั้นกลุ่มจะลบไม่ได้ตลอดกาล; ต้องตั้งเป็นตัวเองเท่านั้น
   if new.created_by is distinct from old.created_by
      and not (old.created_by is null and new.created_by = auth.uid()) then
-    raise exception 'ห้ามเปลี่ยนผู้สร้างวง';
+    raise exception 'ห้ามเปลี่ยนผู้สร้างกลุ่ม';
   end if;
   if new.invite_code is distinct from old.invite_code then
     raise exception 'ห้ามเปลี่ยนโค้ดเชิญ';
@@ -168,8 +168,8 @@ create trigger groups_guard_immutable_trg
   before update on public.groups
   for each row execute function public.groups_guard_immutable();
 
--- group_participants: เห็นแถวของตัวเอง หรือแถวในวงที่ตัวเองอยู่
--- insert ตรงได้แค่ผู้สร้างวง (ตอน createGroup); คนอื่นต้องผ่าน join_group(code)
+-- group_participants: เห็นแถวของตัวเอง หรือแถวในกลุ่มที่ตัวเองอยู่
+-- insert ตรงได้แค่ผู้สร้างกลุ่ม (ตอน createGroup); คนอื่นต้องผ่าน join_group(code)
 drop policy if exists gp_select on public.group_participants;
 create policy gp_select on public.group_participants
   for select using (user_id = auth.uid() or public.is_group_member(group_id));
@@ -193,7 +193,7 @@ drop policy if exists bill_items_member_all on public.bill_items;
 create policy bill_items_member_all on public.bill_items
   for all using (public.is_group_member(group_id)) with check (public.is_group_member(group_id));
 
--- ---------- RPC: เข้าร่วมวงด้วย invite_code ----------
+-- ---------- RPC: เข้าร่วมกลุ่มด้วย invite_code ----------
 -- security definer เพื่อให้เห็น group จาก code ได้ก่อนเป็นสมาชิก แล้ว insert participant ให้
 create or replace function public.join_group(code text)
 returns uuid
@@ -205,16 +205,16 @@ declare
   gid uuid;
 begin
   if auth.uid() is null then
-    raise exception 'ต้อง sign in ก่อนเข้าร่วมวง';
+    raise exception 'ต้อง sign in ก่อนเข้าร่วมกลุ่ม';
   end if;
   if code is null or btrim(code) = '' then
-    raise exception 'ไม่พบวงจากโค้ดนี้';
+    raise exception 'ไม่พบกลุ่มจากโค้ดนี้';
   end if;
 
   select id into gid from public.groups
   where upper(invite_code) = upper(btrim(code));
   if gid is null then
-    raise exception 'ไม่พบวงจากโค้ดนี้';
+    raise exception 'ไม่พบกลุ่มจากโค้ดนี้';
   end if;
 
   insert into public.group_participants (group_id, user_id)
@@ -228,7 +228,7 @@ $$;
 grant execute on function public.join_group(text) to authenticated, anon;
 
 -- ---------- RPC: settlements แบบ atomic ----------
--- security invoker (ค่าเริ่มต้น) → RLS ของ groups ยังบังคับใช้: แก้ได้เฉพาะสมาชิกของวง
+-- security invoker (ค่าเริ่มต้น) → RLS ของ groups ยังบังคับใช้: แก้ได้เฉพาะสมาชิกของกลุ่ม
 -- UPDATE เดียวที่อ่านค่าเดิมจากแถวเอง = atomic ระดับแถว → สองเครื่องติ๊กพร้อมกันไม่ทับกัน
 -- (เดิม client อ่าน array มาแล้วเขียนทับทั้งก้อน → รายการของอีกคนหาย)
 create or replace function public.settlement_toggle(p_group_id uuid, p_key text, p_done boolean)
@@ -259,7 +259,7 @@ begin
   end if;
 
   if result is null then
-    raise exception 'ไม่พบวง หรือไม่มีสิทธิ์แก้วงนี้';
+    raise exception 'ไม่พบกลุ่ม หรือไม่มีสิทธิ์แก้กลุ่มนี้';
   end if;
   return result;
 end;
@@ -285,7 +285,7 @@ begin
   returning settlements into result;
 
   if result is null then
-    raise exception 'ไม่พบวง หรือไม่มีสิทธิ์แก้วงนี้';
+    raise exception 'ไม่พบกลุ่ม หรือไม่มีสิทธิ์แก้กลุ่มนี้';
   end if;
   return result;
 end;

@@ -15,7 +15,6 @@ import {
   formatPromptPay,
   isValidPromptPay,
   Palette,
-  timeStr,
 } from '../src/ui';
 import { useTheme } from '../src/ui/theme';
 import { useStore } from '../src/data/store';
@@ -23,7 +22,7 @@ import { useStore } from '../src/data/store';
 const OPTIONS: Consumes[] = ['both', 'food', 'drink'];
 
 export default function Members() {
-  const { state, addMember, updateMember, removeMember, toggleArrived, toggleLeft } = useStore();
+  const { state, addMember, updateMember, removeMember } = useStore();
   const { colors: c } = useTheme();
   const s = useMemo(() => makeStyles(c), [c]);
   const [name, setName] = useState('');
@@ -108,9 +107,6 @@ export default function Members() {
                 />
               ))}
             </View>
-            <Text style={s.time}>
-              มา {timeStr(m.arrivedAt)} · กลับ {timeStr(m.leftAt)}
-            </Text>
             <PromptPayEdit
               s={s}
               c={c}
@@ -120,24 +116,7 @@ export default function Members() {
             />
           </View>
           <View style={s.actions}>
-            <TinyBtn
-              s={s}
-              c={c}
-              label={m.arrivedAt ? '✓ มาแล้ว' : 'มาถึง'}
-              active={!!m.arrivedAt}
-              color={c.good}
-              toggle
-              onPress={() => toggleArrived(m.id)}
-            />
-            <TinyBtn
-              s={s}
-              c={c}
-              label={m.leftAt ? '✓ กลับแล้ว' : 'กลับ'}
-              active={!!m.leftAt}
-              color={c.food}
-              toggle
-              onPress={() => toggleLeft(m.id)}
-            />
+            {/* ปุ่ม "มาถึง"/"กลับ" ปิดไว้ชั่วคราว — ใช้กับโหมดหารตามเวลาที่ปิดอยู่ */}
             <TinyBtn s={s} c={c} label="ลบ" color={c.danger} onPress={() => confirmRemove(m.name, () => removeMember(m.id))} />
           </View>
         </View>
@@ -148,7 +127,7 @@ export default function Members() {
 
 type Styles = ReturnType<typeof makeStyles>;
 
-/** แก้พร้อมเพย์ของสมาชิกแบบ inline (เก็บเมื่อออกจากช่อง) */
+/** แก้พร้อมเพย์ของสมาชิกแบบ inline (บันทึกเมื่อกดปุ่ม "บันทึก") */
 function PromptPayEdit({
   s,
   c,
@@ -157,30 +136,45 @@ function PromptPayEdit({
   onSave,
 }: Readonly<{ s: Styles; c: Palette; name: string; value: string; onSave: (v: string) => void }>) {
   const [text, setText] = useState(value);
-  // ค่าจากภายนอกเปลี่ยน (เพื่อนในวงแก้ผ่าน realtime) และเราไม่ได้พิมพ์ค้างไว้ → sync ตาม
+  // ค่าจากภายนอกเปลี่ยน (เพื่อนในกลุ่มแก้ผ่าน realtime) และเราไม่ได้พิมพ์ค้างไว้ → sync ตาม
   useEffect(() => {
     setText((prev) => (prev.trim() === value.trim() ? prev : value));
   }, [value]);
 
   const valid = isValidPromptPay(text);
+  const dirty = text.trim() !== value.trim(); // มีการแก้ไขที่ยังไม่บันทึกไหม
+  const canSave = dirty && valid;
   const save = () => {
-    if (valid && text.trim() !== value) onSave(text.trim());
+    if (canSave) onSave(text.trim());
   };
 
   return (
     <View style={{ marginTop: 6, gap: 2 }}>
       <Text style={s.ppLabel}>พร้อมเพย์: {value ? formatPromptPay(value) : '— ยังไม่ระบุ'}</Text>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        onEndEditing={save}
-        onBlur={save}
-        placeholder="เบอร์มือถือ / เลขบัตร ปชช."
-        placeholderTextColor={c.sub}
-        keyboardType="number-pad"
-        style={[s.ppInput, !valid && s.inputError]}
-        accessibilityLabel={`แก้พร้อมเพย์ของ ${name}`}
-      />
+      <View style={s.ppRow}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="เบอร์มือถือ / เลขบัตร ปชช."
+          placeholderTextColor={c.sub}
+          keyboardType="number-pad"
+          style={[s.ppInput, { flex: 1 }, !valid && s.inputError]}
+          accessibilityLabel={`แก้พร้อมเพย์ของ ${name}`}
+        />
+        {/* ปุ่มบันทึก: โผล่เมื่อมีการแก้ไข, กดได้เมื่อค่าถูกต้อง */}
+        {dirty && (
+          <Pressable
+            onPress={save}
+            disabled={!canSave}
+            style={[s.ppSaveBtn, !canSave && s.addBtnDisabled]}
+            {...a11y('button', { disabled: !canSave })}
+            accessibilityLabel={`บันทึกพร้อมเพย์ของ ${name}`}
+            accessibilityHint={canSave ? undefined : 'กรอกพร้อมเพย์ให้ถูกต้องก่อนจึงจะบันทึกได้'}
+          >
+            <Text style={s.ppSaveText}>บันทึก</Text>
+          </Pressable>
+        )}
+      </View>
       {!valid && <Text style={s.errorText}>ต้องเป็นเบอร์มือถือ 10 หลัก หรือ เลขบัตร 13 หลัก</Text>}
     </View>
   );
@@ -264,6 +258,7 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   inputError: { borderWidth: 1, borderColor: c.danger },
   errorText: { color: c.danger, fontSize: 12 },
   ppLabel: { color: c.sub, fontSize: 12 },
+  ppRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   ppInput: {
     backgroundColor: c.cardAlt,
     color: c.text,
@@ -272,6 +267,14 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
   },
+  ppSaveBtn: {
+    backgroundColor: c.primary,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  ppSaveText: { color: c.onPrimary, fontWeight: '700', fontSize: 14 },
   chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   chip: {
     paddingHorizontal: 14,

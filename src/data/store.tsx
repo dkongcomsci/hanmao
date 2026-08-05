@@ -18,7 +18,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { inviteCode, uuid } from '../utils/id';
 
 const STORAGE_KEY = 'hanmao:state:v1';
-const SESSION_KEY = 'hanmao:session:v1'; // ชี้ว่าอยู่วงไหน + เราเป็น member ไหน (ไว้กลับเข้าวงเดิม)
+const SESSION_KEY = 'hanmao:session:v1'; // ชี้ว่าอยู่กลุ่มไหน + เราเป็น member ไหน (ไว้กลับเข้ากลุ่มเดิม)
 const ME_KEY = 'hanmao:me:v1'; // "ฉันคือ member ไหน" ในโหมด local (group mode เก็บใน SESSION_KEY)
 // theme เป็น device preference (ธีมสว่าง/มืดของเครื่องนี้) — ไม่ผูกกับ local/group mode
 // ไม่อยู่ใน AppState และไม่ sync ขึ้น Supabase; persist แยกคีย์ของตัวเอง
@@ -49,6 +49,8 @@ type Store = {
   // bills
   addBill: (name: string, category: Bill['category']) => string;
   updateBill: (id: string, patch: Partial<Bill>) => void;
+  /** บันทึกทั้งบิล (รวมเมนู) ทีเดียว — ใช้กับหน้าแก้บิลที่หน่วงจนกดปุ่มบันทึก */
+  saveBill: (bill: Bill) => void;
   removeBill: (id: string) => void;
   addItem: (billId: string, name: string, price: number) => void;
   updateItem: (billId: string, itemId: string, patch: Partial<BillItem>) => void;
@@ -65,18 +67,18 @@ type Store = {
    */
   toggleSettlement: (key: string) => void;
   /**
-   * ปิดวง/เคลียร์ทั้งหมด (เรียกเมื่อจ่ายครบทุกคนแล้ว)
+   * ปิดกลุ่ม/เคลียร์ทั้งหมด (เรียกเมื่อจ่ายครบทุกคนแล้ว)
    * - local mode: ล้าง state ทั้งหมดกลับเป็นว่าง
-   * - group mode: ลบวงถาวรสำหรับทุกคน แล้วกลับ local mode
+   * - group mode: ลบกลุ่มถาวรสำหรับทุกคน แล้วกลับ local mode
    */
   closeGroup: () => Promise<void>;
   // ---- group (multi-user) ----
   mode: Mode;
   group: Group | null;
   /**
-   * เราเป็นผู้สร้างวง (host) ไหม — มีแค่ host ที่ลบวงทั้งวงได้ (RLS บังคับ ดู patch-004)
+   * เราเป็นผู้สร้างกลุ่ม (host) ไหม — มีแค่ host ที่ลบกลุ่มทั้งกลุ่มได้ (RLS บังคับ ดู patch-004)
    * local mode = true เสมอ (ข้อมูลอยู่ในเครื่องเรา)
-   * ใช้ตั้งข้อความปุ่มปิดวง: host = "ปิดวง (ลบของทุกคน)", คนอื่น = "ออกจากวง"
+   * ใช้ตั้งข้อความปุ่มปิดกลุ่ม: host = "ปิดกลุ่ม (ลบของทุกคน)", คนอื่น = "ออกจากกลุ่ม"
    */
   isHost: boolean;
   myMemberId: string | null;
@@ -84,15 +86,15 @@ type Store = {
   setMe: (memberId: string | null) => void;
   /** backend พร้อมใช้ไหม (มี env Supabase) */
   remoteEnabled: boolean;
-  /** สร้างวงใหม่ แล้วย้าย state ปัจจุบัน (local) ขึ้นวง */
+  /** สร้างกลุ่มใหม่ แล้วย้าย state ปัจจุบัน (local) ขึ้นกลุ่ม */
   createGroup: (groupName: string) => Promise<Group>;
-  /** เข้าร่วมวงด้วยโค้ดเชิญ (จาก invite link/QR) */
+  /** เข้าร่วมกลุ่มด้วยโค้ดเชิญ (จาก invite link/QR) */
   joinGroup: (code: string) => Promise<void>;
-  /** ผูกตัวเองกับ member ที่มีอยู่ในวง (throw ถ้ามีคนอื่น claim ไปแล้ว) */
+  /** ผูกตัวเองกับ member ที่มีอยู่ในกลุ่ม (throw ถ้ามีคนอื่น claim ไปแล้ว) */
   claimMember: (memberId: string) => Promise<void>;
   /** เข้าร่วมเป็น member ใหม่ (สร้าง member + claim) */
   joinAsNewMember: (name: string, consumes: Consumes) => Promise<void>;
-  /** ออกจากวง → กลับ local mode */
+  /** ออกจากกลุ่ม → กลับ local mode */
   leaveGroup: () => Promise<void>;
 };
 
@@ -144,7 +146,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>('local');
   const [group, setGroup] = useState<Group | null>(null);
-  // เราสร้างวงนี้เองไหม (local mode = true เพราะข้อมูลอยู่ในเครื่องเรา)
+  // เราสร้างกลุ่มนี้เองไหม (local mode = true เพราะข้อมูลอยู่ในเครื่องเรา)
   const [isHost, setIsHost] = useState(true);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   // theme เป็น state แยกใน provider (device preference) ไม่แตะ AppState/Supabase
@@ -172,12 +174,12 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     setState(next);
   };
 
-  /** ทิ้งผลลัพธ์ refetch ที่ยังค้างอยู่ทั้งหมด (ใช้ตอนออกจากวง/สลับโหมด) */
+  /** ทิ้งผลลัพธ์ refetch ที่ยังค้างอยู่ทั้งหมด (ใช้ตอนออกจากกลุ่ม/สลับโหมด) */
   const invalidateFetches = () => {
     fetchSeqRef.current++;
   };
 
-  // ---------- โหลด/บันทึก local + กลับเข้าวงเดิมอัตโนมัติ ----------
+  // ---------- โหลด/บันทึก local + กลับเข้ากลุ่มเดิมอัตโนมัติ ----------
   useEffect(() => {
     (async () => {
       try {
@@ -191,7 +193,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         // โหลดธีมที่เคยตั้งไว้ (device preference); ค่าเพี้ยน/ไม่มี → คงไว้ 'dark' (default)
         const savedTheme = await AsyncStorage.getItem(THEME_KEY);
         if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
-        // กลับเข้าวงเดิมถ้ามี session ค้างและ backend พร้อม
+        // กลับเข้ากลุ่มเดิมถ้ามี session ค้างและ backend พร้อม
         if (supabase) {
           const sessRaw = await AsyncStorage.getItem(SESSION_KEY);
           if (sessRaw) {
@@ -247,11 +249,11 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     return uid;
   };
 
-  /** refetch ทั้งวง แล้วเขียนกลับ state (authoritative); ทิ้งผลถ้ามีรอบใหม่กว่าแล้ว */
+  /** refetch ทั้งกลุ่ม แล้วเขียนกลับ state (authoritative); ทิ้งผลถ้ามีรอบใหม่กว่าแล้ว */
   const refetch = async (groupId: string) => {
     const seq = ++fetchSeqRef.current;
     const next = await fetchGroupState(groupId);
-    // response ช้ากว่ารอบใหม่ / ออกจากวงไปแล้ว / สลับวง → ทิ้งไป อย่าทับ state ใหม่กว่า
+    // response ช้ากว่ารอบใหม่ / ออกจากกลุ่มไปแล้ว / สลับกลุ่ม → ทิ้งไป อย่าทับ state ใหม่กว่า
     if (seq !== fetchSeqRef.current) return;
     if (groupIdRef.current !== groupId || modeRef.current !== 'group') return;
     applyState(next);
@@ -263,7 +265,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
     const client = sb();
     const uid = await currentUid();
     // created_by อาจยังไม่มีคอลัมน์ถ้า project ไม่ได้รัน patch-004 → ถอยไป select แบบเดิม
-    // และถือว่าเป็น host (พฤติกรรมเดิม: สมาชิกคนไหนก็ลบวงได้) ไม่ให้ปุ่มปิดวงหายไปเฉย ๆ
+    // และถือว่าเป็น host (พฤติกรรมเดิม: สมาชิกคนไหนก็ลบกลุ่มได้) ไม่ให้ปุ่มปิดกลุ่มหายไปเฉย ๆ
     let g: { id: string; name: string; invite_code: string } | null = null;
     let host = true;
     const withHost = await client
@@ -277,15 +279,15 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         .select('id, name, invite_code')
         .eq('id', groupId)
         .single();
-      if (fallback.error || !fallback.data) throw fallback.error ?? new Error('ไม่พบวง');
+      if (fallback.error || !fallback.data) throw fallback.error ?? new Error('ไม่พบกลุ่ม');
       g = fallback.data;
     } else if (withHost.data) {
       g = withHost.data;
       host = (withHost.data as { created_by?: string | null }).created_by === uid;
     }
-    if (!g) throw new Error('ไม่พบวง');
+    if (!g) throw new Error('ไม่พบกลุ่ม');
 
-    invalidateFetches(); // ทิ้ง refetch ของวงก่อนหน้า
+    invalidateFetches(); // ทิ้ง refetch ของกลุ่มก่อนหน้า
     groupIdRef.current = groupId;
     setGroup({ id: g.id, name: g.name, inviteCode: g.invite_code });
     setIsHost(host);
@@ -404,8 +406,8 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
 
     /**
      * จำ "ฉันคือ member ไหน" ลงที่เก็บให้ตรงโหมดปัจจุบัน
-     * group mode → SESSION_KEY (id ของ member ในวง), local mode → ME_KEY
-     * แยกกันเพราะ id ของวงกับของ local เป็นคนละชุด ถ้าเขียนข้ามกันจะได้ "ฉัน" ที่ไม่มีตัวตน
+     * group mode → SESSION_KEY (id ของ member ในกลุ่ม), local mode → ME_KEY
+     * แยกกันเพราะ id ของกลุ่มกับของ local เป็นคนละชุด ถ้าเขียนข้ามกันจะได้ "ฉัน" ที่ไม่มีตัวตน
      */
     const rememberMe = (memberId: string | null) => {
       setMyMemberId(memberId);
@@ -530,6 +532,29 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         mutBill(id, (b) => ({ ...b, ...patch }));
         remote(() => sb().from('bills').update(billPatchToRow(patch)).eq('id', id));
       },
+      saveBill: (bill) => {
+        // เมนูเดิมใน store (ก่อนเขียนทับ) — ใช้ diff ว่าต้อง insert/update/delete อะไรบ้างบน server
+        const prevItems = stateRef.current.bills.find((b) => b.id === bill.id)?.items ?? [];
+        // เขียนทั้งบิล (ฟิลด์ + เมนู) ลง state ทีเดียว
+        mutBill(bill.id, () => bill);
+        remote(() => {
+          const client = sb();
+          const groupId = gid();
+          // 1) ฟิลด์ของบิลเอง (ไม่รวม items — items อยู่คนละตาราง)
+          void client.from('bills').update(billPatchToRow(bill)).eq('id', bill.id);
+          // 2) เมนูที่ถูกลบออก
+          const nextIds = new Set(bill.items.map((it) => it.id));
+          const removed = prevItems.filter((it) => !nextIds.has(it.id)).map((it) => it.id);
+          if (removed.length) void client.from('bill_items').delete().in('id', removed);
+          // 3) เมนูที่เหลือ/เพิ่มใหม่ — upsert ทั้งชุด (insert ตัวใหม่, update ตัวเดิม)
+          if (bill.items.length) {
+            return client
+              .from('bill_items')
+              .upsert(bill.items.map((it) => itemToRow(groupId, bill.id, it)));
+          }
+          return Promise.resolve();
+        });
+      },
       removeBill: (id) => {
         commitPrune((s) => ({ ...s, bills: s.bills.filter((b) => b.id !== id) }));
         remote(() => sb().from('bills').delete().eq('id', id)); // bill_items ลบตาม cascade
@@ -602,8 +627,8 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
           applyState(empty);
           return;
         }
-        // group mode: ลบวงถาวร (cascade ลบ members/bills/items) แล้วกลับ local
-        // RLS ยอมให้เฉพาะผู้สร้างวง — คนอื่นกดจะได้แค่ "ออกจากวง" (แถวไม่ถูกลบ ไม่ error)
+        // group mode: ลบกลุ่มถาวร (cascade ลบ members/bills/items) แล้วกลับ local
+        // RLS ยอมให้เฉพาะผู้สร้างกลุ่ม — คนอื่นกดจะได้แค่ "ออกจากกลุ่ม" (แถวไม่ถูกลบ ไม่ error)
         const client = supabase;
         const gidClose = groupIdRef.current;
         if (client && gidClose) {
@@ -611,7 +636,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
             const { error } = await client.from('groups').delete().eq('id', gidClose);
             if (error) throw error;
           } else {
-            // ไม่ใช่ host: ถอนตัวเองออกจากวง ไม่ลบของคนอื่น
+            // ไม่ใช่ host: ถอนตัวเองออกจากกลุ่ม ไม่ลบของคนอื่น
             await client.from('group_participants').delete().eq('group_id', gidClose);
             setMyMemberId(null);
           }
@@ -626,7 +651,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         const uid = await currentUid();
         const id = uuid();
         const code = inviteCode();
-        const name = groupName.trim() || 'วงใหม่';
+        const name = groupName.trim() || 'กลุ่มใหม่';
         const local = stateRef.current;
         const mine = myMemberId && local.members.some((m) => m.id === myMemberId) ? myMemberId : null;
 
@@ -637,16 +662,16 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
           name,
           invite_code: code,
           venue: local.venue,
-          // ยกการติ๊ก "โอนแล้ว" ขึ้นวงด้วย (ไม่งั้นสถานะที่ทำไว้ตอน local หายหมด)
+          // ยกการติ๊ก "โอนแล้ว" ขึ้นกลุ่มด้วย (ไม่งั้นสถานะที่ทำไว้ตอน local หายหมด)
           settlements: local.settlements,
         });
         if (error) throw error;
-        // เป็น participant ของวงที่เพิ่งสร้าง
+        // เป็น participant ของกลุ่มที่เพิ่งสร้าง
         const { error: pErr } = await client.from('group_participants').insert({ group_id: id });
         if (pErr) throw pErr;
-        setIsHost(true); // เราสร้างวงนี้เอง (enterGroup จะยืนยันซ้ำจาก created_by)
+        setIsHost(true); // เราสร้างกลุ่มนี้เอง (enterGroup จะยืนยันซ้ำจาก created_by)
 
-        // ย้าย state local ปัจจุบันขึ้นวง (migrate) — คง id เดิมไว้ทั้งหมด
+        // ย้าย state local ปัจจุบันขึ้นกลุ่ม (migrate) — คง id เดิมไว้ทั้งหมด
         // created_at ต้องส่งเองแบบไล่ทีละ ms: default now() ของ Postgres คงที่ทั้งทรานแซกชัน
         // → insert ชุดเดียวจะได้เวลาเท่ากันหมด แล้ว order by created_at คืนลำดับที่ไม่นิ่ง
         // (ลำดับสมาชิกมีผลถึงการเกลี่ยเศษสตางค์ ดูคอมเมนต์ที่ fetchGroupState)
@@ -674,7 +699,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
             if (iErr) throw iErr;
           }
         }
-        // เข้าวงพร้อมตัวตนเดิม (myMemberId) ไม่ใช่ null
+        // เข้ากลุ่มพร้อมตัวตนเดิม (myMemberId) ไม่ใช่ null
         await enterGroup(id, mine);
         return { id, name, inviteCode: code };
       },
@@ -683,7 +708,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         const client = sb();
         const { data, error } = await client.rpc('join_group', { code: code.trim().toUpperCase() });
         if (error) throw error;
-        if (!data) throw new Error('ไม่พบวงจากโค้ดนี้');
+        if (!data) throw new Error('ไม่พบกลุ่มจากโค้ดนี้');
         await enterGroup(data as string, null);
       },
       claimMember: async (memberId) => {

@@ -16,8 +16,8 @@
    ซึ่งลากโซ่ `store → supabase → react-native-url-polyfill` (แตะ `BlobModule`) เข้ามา
    ⇒ unit test ที่ import `src/ui` เพื่อทดสอบ `baht()`/`a11y()` จะ crash ทั้งไฟล์ (index.ts ต้องคง pure)
 
-นอกจากนี้ธีมเป็น **ความชอบของเครื่อง (device preference)** ไม่ใช่ข้อมูลของวง —
-ไม่ควรอยู่ใน `AppState` และไม่ควร sync ขึ้น Supabase (คนในวงเดียวกันอาจชอบธีมคนละแบบ)
+นอกจากนี้ธีมเป็น **ความชอบของเครื่อง (device preference)** ไม่ใช่ข้อมูลของกลุ่ม —
+ไม่ควรอยู่ใน `AppState` และไม่ควร sync ขึ้น Supabase (คนในกลุ่มเดียวกันอาจชอบธีมคนละแบบ)
 
 ## การตัดสินใจ
 

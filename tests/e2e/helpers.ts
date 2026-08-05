@@ -4,7 +4,7 @@ import { Page, expect } from '@playwright/test';
  * ทุกคีย์ที่ store เขียนลง storage — ต้องล้างให้ครบ ไม่งั้นข้อมูลจากเทสก่อนค้างข้ามเทส
  * (ยืนยันชื่อคีย์จาก src/data/store.tsx)
  * - hanmao:state:v1   สมาชิก/บิล/settlements
- * - hanmao:session:v1 อยู่วงไหน + เราเป็น member ไหนในวง (group mode)
+ * - hanmao:session:v1 อยู่กลุ่มไหน + เราเป็น member ไหนในกลุ่ม (group mode)
  * - hanmao:me:v1      "ฉันคือ member ไหน" (local mode) → ถ้าค้าง แท็บ "ฉัน" จะเห็นคนของเทสก่อน
  * - hanmao:theme:v1   ธีมสว่าง/มืด (device preference) → ถ้าค้าง เทส default=dark จะแดงมั่ว
  */

@@ -6,7 +6,7 @@
 app/                 UI (expo-router, file-based) — ต้องอยู่ที่ root ตามข้อกำหนด expo-router
   _layout.tsx        Bottom Tabs (หน้าแรก/สมาชิก/บิล/สรุป/ฉัน) + StoreProvider + ปุ่มสลับธีมบน header
   index / members / bills / bill/[id] / summary / me
-  group / join/[code]   จัดการวง + เข้าร่วมผ่าน invite/QR (group mode)
+  group / join/[code]   จัดการกลุ่ม + เข้าร่วมผ่าน invite/QR (group mode)
 src/
   ui/index.ts        presentation pure (palette 2 ชุด darkColors/lightColors + colors, baht, a11y, labels, confirmRemove/confirmAction/notify/friendlyError)
   ui/theme.ts        hook useTheme() ห่อ store → คืน palette ปัจจุบัน (แยกจาก index.ts เพื่อคง index.ts pure)
@@ -49,10 +49,10 @@ settle-up (คิดบนสตางค์จำนวนเต็ม) + `tran
 
 ## State: dual-mode
 - **local** — AsyncStorage คีย์ `hanmao:state:v1` (คนเดียว, offline). เทส e2e ครอบโหมดนี้
-- **group** — Supabase Postgres + Realtime เมื่อเข้าร่วมวง (หลายคนแก้พร้อมกัน)
+- **group** — Supabase Postgres + Realtime เมื่อเข้าร่วมกลุ่ม (หลายคนแก้พร้อมกัน)
   หน้าจอเรียกผ่าน `useStore()` เดิม — store apply optimistic ทันที + ยิง row-level ops ผ่าน `remote.ts`
   แล้ว subscribe realtime → refetch ประกอบกลับเป็น `AppState`. ไม่มี env Supabase → บังคับ local
-- คีย์ local เสริม: `hanmao:session:v1` (จำวง/ตัวตนกลับเข้าวงเดิม), `hanmao:me:v1` ("ฉันคือใคร" โหมด local)
+- คีย์ local เสริม: `hanmao:session:v1` (จำกลุ่ม/ตัวตนกลับเข้ากลุ่มเดิม), `hanmao:me:v1` ("ฉันคือใคร" โหมด local)
 - **ธีม** (สว่าง/มืด) เป็น **device preference** ไม่อยู่ใน `AppState` และไม่ sync ขึ้น Supabase —
   persist แยก **คีย์ที่ 4 `hanmao:theme:v1`** (string `'light'`/`'dark'`), default มืด, ไม่มีโหมด auto
   store มี `theme`/`toggleTheme()`/`setTheme()`; หน้าจอดึง palette ผ่าน `useTheme()` (`src/ui/theme.ts`)
@@ -63,19 +63,19 @@ settle-up (คิดบนสตางค์จำนวนเต็ม) + `tran
 - **การ fetch แถวต้องเรียงนิ่ง**: `fetchGroupState()` สั่ง `.order(<เวลา>)` + tiebreak `id` ทั้ง `members`/`bills`/`bill_items`
   แล้ว **เรียงซ้ำฝั่ง client** อีกชั้น (`sortByTimeThenId`) เป็นด่านสุดท้าย; project เก่าที่ไม่มีคอลัมน์เวลา →
   `selectOrdered()` ถอยไปดึงแบบไม่ `order` (ยังนิ่งเพราะตกไปเรียงตาม `id`)
-  ตอน migrate local → วง (`createGroup`) ต้องส่ง `created_at` เองด้วย `seqStamp()` ไล่ทีละ 1 ms
+  ตอน migrate local → กลุ่ม (`createGroup`) ต้องส่ง `created_at` เองด้วย `seqStamp()` ไล่ทีละ 1 ms
   เพราะ `now()` ของ Postgres คงที่ทั้งทรานแซกชัน. index ฝั่ง DB อยู่ใน `patch-005-stable-order.sql`
   เหตุผลที่เรื่องนี้กระทบ **ตัวเงิน** ไม่ใช่แค่ลำดับรายชื่อบนจอ: ดูหัวข้อ "โมเดลข้อมูล & สูตรหาร" ด้านบน
-- สิทธิ์ในวงบังคับที่ RLS: เข้าวงผ่าน RPC `join_group(code)` เท่านั้น, ลบวงได้เฉพาะผู้สร้าง (`groups.created_by` → `isHost`)
+- สิทธิ์ในกลุ่มบังคับที่ RLS: เข้ากลุ่มผ่าน RPC `join_group(code)` เท่านั้น, ลบกลุ่มได้เฉพาะผู้สร้าง (`groups.created_by` → `isHost`)
 - group mode ต้อง **ตั้งค่ามือ** ก่อน (รัน SQL ตามลำดับ ล่าสุด `patch-005` + เปิด Anonymous sign-in + ใส่ env) —
   ขั้นตอนอยู่ที่ [../README.md](../README.md) และ [../infra/supabase/README.md](../infra/supabase/README.md)
   (**ยังไม่มีไฟล์ SQL ไหนถูกรันกับ Postgres จริง** และ group mode ไม่มี E2E ครอบ เพราะ E2E ถูกบังคับเป็น local mode)
 
 ## บันทึกการตัดสินใจ (ADR)
-- [0001](adr/0001-supabase-realtime.md) เลือก Supabase สำหรับวงหลายคน real-time
+- [0001](adr/0001-supabase-realtime.md) เลือก Supabase สำหรับกลุ่มหลายคน real-time
 - [0002](adr/0002-integer-cents-largest-remainder.md) คิดเงินบนสตางค์จำนวนเต็ม + largest remainder
 - [0003](adr/0003-transfer-key-amount-bound.md) `transferKey` ผูกกับยอดเงิน
 - [0004](adr/0004-no-promptpay-in-shared-image.md) ไม่ใส่เบอร์พร้อมเพย์ในรูปสรุปที่แชร์
-- [0005](adr/0005-group-host-and-rpc-only-join.md) host เป็นเจ้าของวง + เข้าวงผ่าน RPC เท่านั้น
+- [0005](adr/0005-group-host-and-rpc-only-join.md) host เป็นเจ้าของกลุ่ม + เข้ากลุ่มผ่าน RPC เท่านั้น
 - [0006](adr/0006-stable-settle-topology.md) คู่โอนต้องนิ่งเมื่อยอดลอยตามเวลา (star + `transferKey` 2 รูปแบบ)
 - [0007](adr/0007-runtime-theme-switch.md) สลับธีมสว่าง/มืดตอน runtime (palette 2 ชุด + `useTheme` + `makeStyles`)

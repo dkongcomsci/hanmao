@@ -19,7 +19,7 @@ export function uuid(): string {
     .join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
-/** โค้ดเชิญเข้าวงแบบสั้น อ่านง่าย (ไม่ใช้ตัวที่สับสน 0/O/1/I) สำหรับลิงก์/QR */
+/** โค้ดเชิญเข้ากลุ่มแบบสั้น อ่านง่าย (ไม่ใช้ตัวที่สับสน 0/O/1/I) สำหรับลิงก์/QR */
 export function inviteCode(len = 6): string {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const bytes = new Uint8Array(len);

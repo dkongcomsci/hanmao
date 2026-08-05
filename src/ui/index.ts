@@ -152,7 +152,7 @@ export const splitModeLabel: Record<string, string> = {
 
 /**
  * ยืนยันก่อนทำ action ที่ย้อนกลับไม่ได้ — รองรับทั้ง native (Alert) และ web (window.confirm)
- * ใช้ได้ทั้งการลบและการเคลียร์/ปิดวง โดยกำหนดหัวข้อ/รายละเอียด/ป้ายปุ่มเองได้
+ * ใช้ได้ทั้งการลบและการเคลียร์/ปิดกลุ่ม โดยกำหนดหัวข้อ/รายละเอียด/ป้ายปุ่มเองได้
  */
 export function confirmAction(opts: {
   title: string;

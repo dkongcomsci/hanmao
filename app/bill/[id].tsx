@@ -1,13 +1,15 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { billIssues, billMembers, computeBill } from '../../src/domain/split';
-import { SplitMode } from '../../src/domain/types';
-import { a11y, baht, confirmRemove, consumesLabel, Palette, splitModeLabel } from '../../src/ui';
+import { Bill, SplitMode } from '../../src/domain/types';
+import { a11y, baht, confirmRemove, consumesLabel, friendlyError, notify, Palette, splitModeLabel } from '../../src/ui';
 import { useTheme } from '../../src/ui/theme';
 import { useStore } from '../../src/data/store';
+import { uuid } from '../../src/utils/id';
 
-const MODES: SplitMode[] = ['equal', 'itemized', 'time'];
+// ปิดโหมด "หารตามเวลา" ไว้ก่อน — ยังไม่ให้เลือกใหม่ (บิลเก่าที่เป็น time ยังคำนวณได้ตามเดิม)
+const MODES: SplitMode[] = ['equal', 'itemized'];
 
 /** แปลงข้อความเป็นตัวเลข (ว่าง/ไม่ใช่เลข = 0) */
 function num(v: string): number {
@@ -25,6 +27,23 @@ export default function BillDetail() {
 
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
+  // เปิด popup เลือกหน้าถัดไปหลังบันทึกสำเร็จ (เป็น component ในแอป ไม่ใช้ dialog ของ browser)
+  const [savedModal, setSavedModal] = useState(false);
+
+  // draft = สำเนาที่แก้ในหน้านี้ ยังไม่เขียนลง store จนกว่าจะกด "บันทึก"
+  const [draft, setDraft] = useState<Bill | null>(bill ?? null);
+  // baseRef = ลายเซ็นของบิลใน store ที่ draft อ้างอิงอยู่ (เทียบว่าแก้ค้างไว้ไหม + รับค่าใหม่จาก realtime)
+  const baseRef = useRef<string>(bill ? JSON.stringify(bill) : '');
+  const base = bill ? JSON.stringify(bill) : '';
+  // บิลใน store เปลี่ยน (เพื่อนในกลุ่มแก้/โหลดใหม่) และเราไม่ได้แก้ค้างไว้ → รับค่าใหม่มาเป็น draft
+  useEffect(() => {
+    if (!bill) return;
+    setDraft((prev) => {
+      const notDirty = prev === null || JSON.stringify(prev) === baseRef.current;
+      baseRef.current = base;
+      return notDirty ? bill : prev;
+    });
+  }, [base, bill]);
 
   if (!bill) {
     return (
@@ -46,63 +65,106 @@ export default function BillDetail() {
     );
   }
 
+  // draft ยังไม่พร้อม (รอ effect รอบแรก) — ไม่ render อะไรก่อน
+  if (!draft) return null;
+
+  // แก้เฉพาะ draft (ไม่แตะ store) — commit ตอนกด "บันทึก"
+  const patch = (p: Partial<Bill>) => setDraft((d) => (d ? { ...d, ...p } : d));
+
+  // มีการแก้ไขที่ยังไม่บันทึกไหม
+  const dirty = JSON.stringify(draft) !== baseRef.current;
+  // บันทึกได้เมื่อ: เลือกคนออกเงินแล้ว + มีเมนูอย่างน้อย 1 รายการ (นอกจากต้องมีการแก้ไข)
+  const hasPayer = !!draft.paidById;
+  const hasItems = draft.items.length > 0;
+  const canSave = dirty && hasPayer && hasItems;
+  // เหตุผลที่ยังบันทึกไม่ได้ (ใช้เป็นทั้ง hint บนจอและ accessibilityHint)
+  let saveBlock = '';
+  if (!hasPayer) saveBlock = 'เลือกคนออกเงินก่อนจึงจะบันทึกได้';
+  else if (!hasItems) saveBlock = 'เพิ่มเมนูอย่างน้อย 1 รายการก่อนจึงจะบันทึกได้';
+  else if (!dirty) saveBlock = 'ยังไม่มีการแก้ไขให้บันทึก';
+
+  const save = () => {
+    if (!canSave) return;
+    try {
+      // เขียนทั้งบิล (รวมเมนู) ทีเดียว — saveBill จัดการ sync เมนูขึ้น server ให้เอง
+      store.saveBill(draft);
+      baseRef.current = JSON.stringify(draft);
+    } catch (e) {
+      notify('บันทึกไม่สำเร็จ', friendlyError(e, 'ลองใหม่อีกครั้ง'));
+      return;
+    }
+    // บันทึกแล้ว — เปิด popup (component) ให้เลือกจะไปหน้าไหนต่อ
+    setSavedModal(true);
+  };
+
+  // ปิด popup แล้วไปหน้าที่เลือก (ปิดก่อนเพื่อไม่ให้ modal ค้างบนหน้าใหม่)
+  const goAfterSave = (path: string) => {
+    setSavedModal(false);
+    router.replace(path as never);
+  };
+
   // เวลาอ้างอิงเดียวสำหรับทั้ง render (บิลโหมด "หารตามเวลา" ต้องใช้ค่าเดียวกันทุกจุด)
   const now = Date.now();
-  const bd = computeBill(bill, store.state.members, now);
-  const eligible = billMembers(bill, store.state.members);
+  const bd = computeBill(draft, store.state.members, now);
+  const eligible = billMembers(draft, store.state.members);
   // เหตุผลที่บิลยังไม่เข้าสรุป — ใช้ข้อความจาก domain ให้ตรงกับเกณฑ์จริงเสมอ
-  const issues = billIssues(bill, store.state.members);
+  const issues = billIssues(draft, store.state.members);
   const priceNum = parseFloat(itemPrice);
   const canAddItem = itemName.trim().length > 0 && !isNaN(priceNum);
 
   const addItem = () => {
     if (!canAddItem) return;
-    store.addItem(bill.id, itemName, priceNum);
+    patch({ items: [...draft.items, { id: uuid(), name: itemName.trim(), price: priceNum, participantIds: [] }] });
     setItemName('');
     setItemPrice('');
   };
 
+  const removeItem = (itemId: string) =>
+    patch({ items: draft.items.filter((it) => it.id !== itemId) });
+
+  const toggleItemParticipant = (itemId: string, memberId: string) =>
+    patch({
+      items: draft.items.map((it) =>
+        it.id !== itemId
+          ? it
+          : {
+              ...it,
+              participantIds: it.participantIds.includes(memberId)
+                ? it.participantIds.filter((x) => x !== memberId)
+                : [...it.participantIds, memberId],
+            },
+      ),
+    });
+
   // เลือก/ยกเลิกคนออกเงิน — ยกเลิกแล้วต้องปลด "บิลเลี้ยง" ด้วย (เลี้ยงโดยไม่มีคนจ่ายไม่มีความหมาย)
   const pickPayer = (memberId: string) => {
-    if (bill.paidById === memberId) store.updateBill(bill.id, { paidById: null, isTreat: false });
-    else store.updateBill(bill.id, { paidById: memberId });
+    if (draft.paidById === memberId) patch({ paidById: null, isTreat: false });
+    else patch({ paidById: memberId });
   };
 
-  const payerName = store.state.members.find((m) => m.id === bill.paidById)?.name ?? null;
+  const payerName = store.state.members.find((m) => m.id === draft.paidById)?.name ?? null;
 
   // คำอธิบายใต้หัวข้อ "ใครร่วมบิลนี้" (ไม่เลือกใคร = ทุกคนที่เข้าเงื่อนไขหมวด)
   const allWord =
-    bill.category === 'mixed' ? 'ทุกคนในวง' : `ทุกคนที่กิน${consumesLabel[bill.category]}`;
+    draft.category === 'mixed' ? 'ทุกคนในกลุ่ม' : `ทุกคนที่กิน${consumesLabel[draft.category]}`;
   const participantHint =
-    bill.memberIds.length === 0
+    draft.memberIds.length === 0
       ? `ไม่เลือก = ${allWord} (${eligible.length} คน)`
-      : `เลือกไว้ ${bill.memberIds.length} คน · แตะซ้ำเพื่อเอาออก`;
+      : `เลือกไว้ ${draft.memberIds.length} คน · แตะซ้ำเพื่อเอาออก`;
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* ชื่อบิล */}
       <TextInput
-        value={bill.name}
-        onChangeText={(t) => store.updateBill(bill.id, { name: t })}
+        value={draft.name}
+        onChangeText={(t) => patch({ name: t })}
         style={s.title}
         placeholder="ชื่อบิล"
         placeholderTextColor={c.sub}
         accessibilityLabel="ชื่อบิล"
       />
-      {bill.name.trim().length === 0 && (
+      {draft.name.trim().length === 0 && (
         <Text style={s.errorText}>ยังไม่ได้ตั้งชื่อบิล — ตั้งชื่อไว้จะหาง่ายกว่า</Text>
-      )}
-
-      {/* เตือนเมื่อบิลยังไม่สมบูรณ์ (ไม่เข้าสรุปจนกว่าจะครบ) */}
-      {issues.length > 0 && (
-        <View style={s.warnBox} accessibilityRole="alert">
-          <Text style={s.warnTitle}>บิลนี้ยังไม่เข้าสรุป</Text>
-          {issues.map((msg) => (
-            <Text key={msg} style={s.warnText}>
-              • {msg}
-            </Text>
-          ))}
-        </View>
       )}
 
       {/* วิธีหาร */}
@@ -111,18 +173,18 @@ export default function BillDetail() {
         {MODES.map((m) => (
           <Pressable
             key={m}
-            onPress={() => store.updateBill(bill.id, { splitMode: m })}
-            style={[s.chip, bill.splitMode === m && s.chipActive]}
-            {...a11y('button', { selected: bill.splitMode === m })}
+            onPress={() => patch({ splitMode: m })}
+            style={[s.chip, draft.splitMode === m && s.chipActive]}
+            {...a11y('button', { selected: draft.splitMode === m })}
             accessibilityLabel={`วิธีหาร ${splitModeLabel[m]}`}
           >
-            <Text style={[s.chipText, bill.splitMode === m && s.chipTextActive]}>
+            <Text style={[s.chipText, draft.splitMode === m && s.chipTextActive]}>
               {splitModeLabel[m]}
             </Text>
           </Pressable>
         ))}
       </View>
-      {bill.splitMode === 'time' && (
+      {draft.splitMode === 'time' && (
         <Text style={s.hint}>
           ใช้เวลามา-กลับของแต่ละคน (ตั้งที่แท็บสมาชิก) · คนที่ยังไม่กลับคิดถึงตอนนี้
         </Text>
@@ -137,11 +199,11 @@ export default function BillDetail() {
           <Pressable
             key={m.id}
             onPress={() => pickPayer(m.id)}
-            style={[s.chip, bill.paidById === m.id && s.chipActive]}
-            {...a11y('button', { selected: bill.paidById === m.id })}
+            style={[s.chip, draft.paidById === m.id && s.chipActive]}
+            {...a11y('button', { selected: draft.paidById === m.id })}
             accessibilityLabel={`คนออกเงิน ${m.name}`}
           >
-            <Text style={[s.chipText, bill.paidById === m.id && s.chipTextActive]}>{m.name}</Text>
+            <Text style={[s.chipText, draft.paidById === m.id && s.chipTextActive]}>{m.name}</Text>
           </Pressable>
         ))}
         {store.state.members.length === 0 && (
@@ -158,20 +220,20 @@ export default function BillDetail() {
 
       {/* บิลเลี้ยง: คนจ่ายรับผิดชอบยอดเต็ม คนอื่นจ่าย 0 */}
       <Pressable
-        style={[s.treatRow, bill.isTreat && s.treatRowActive]}
-        onPress={() => store.updateBill(bill.id, { isTreat: !bill.isTreat })}
-        disabled={!bill.paidById}
-        {...a11y('switch', { checked: !!bill.isTreat, disabled: !bill.paidById })}
+        style={[s.treatRow, draft.isTreat && s.treatRowActive]}
+        onPress={() => patch({ isTreat: !draft.isTreat })}
+        disabled={!draft.paidById}
+        {...a11y('switch', { checked: !!draft.isTreat, disabled: !draft.paidById })}
         accessibilityLabel="บิลนี้คนจ่ายเลี้ยง"
       >
         <View style={{ flex: 1 }}>
-          <Text style={[s.treatTitle, !bill.paidById && { opacity: 0.4 }]}>🎁 คนจ่ายเลี้ยง</Text>
-          <Text style={[s.treatDesc, !bill.paidById && { opacity: 0.4 }]}>
+          <Text style={[s.treatTitle, !draft.paidById && { opacity: 0.4 }]}>🎁 คนจ่ายเลี้ยง</Text>
+          <Text style={[s.treatDesc, !draft.paidById && { opacity: 0.4 }]}>
             {payerName ? `${payerName} จ่ายเต็ม คนอื่นไม่ต้องหาร` : 'เลือกคนออกเงินก่อน'}
           </Text>
         </View>
-        <View style={[s.toggle, bill.isTreat && s.toggleOn]}>
-          <View style={[s.knob, bill.isTreat && s.knobOn]} />
+        <View style={[s.toggle, draft.isTreat && s.toggleOn]}>
+          <View style={[s.knob, draft.isTreat && s.knobOn]} />
         </View>
       </Pressable>
 
@@ -180,16 +242,17 @@ export default function BillDetail() {
       <Text style={s.hint}>{participantHint}</Text>
       <View style={s.chips}>
         {store.state.members.map((m) => {
-          const on = bill.memberIds.includes(m.id);
+          const on = draft.memberIds.includes(m.id);
           return (
             <Pressable
               key={m.id}
-              onPress={() => {
-                const next = on
-                  ? bill.memberIds.filter((x) => x !== m.id)
-                  : [...bill.memberIds, m.id];
-                store.updateBill(bill.id, { memberIds: next });
-              }}
+              onPress={() =>
+                patch({
+                  memberIds: on
+                    ? draft.memberIds.filter((x) => x !== m.id)
+                    : [...draft.memberIds, m.id],
+                })
+              }
               style={[s.chip, on && s.chipActive]}
               {...a11y('checkbox', { checked: on })}
               accessibilityLabel={`ผู้ร่วมบิล ${m.name}`}
@@ -229,7 +292,7 @@ export default function BillDetail() {
           onSubmitEditing={addItem}
         />
         <Pressable
-          style={[s.addSmall, !canAddItem && s.btnDisabled]}
+          style={[s.addSmall, draft.items.length === 0 && s.addSmallHighlight, !canAddItem && s.btnDisabled]}
           onPress={addItem}
           disabled={!canAddItem}
           {...a11y('button', { disabled: !canAddItem })}
@@ -242,25 +305,25 @@ export default function BillDetail() {
       {!canAddItem && (itemName.trim().length > 0 || itemPrice.length > 0) && (
         <Text style={s.errorText}>ต้องใส่ทั้งชื่อเมนูและราคา (ตัวเลข) ก่อนจึงจะเพิ่มได้</Text>
       )}
-      {bill.items.length === 0 && (
+      {draft.items.length === 0 && (
         <Text style={s.hint}>ยังไม่มีเมนู — ใส่ชื่อเมนูกับราคาด้านบนแล้วกด +</Text>
       )}
 
-      {bill.items.map((it) => (
+      {draft.items.map((it) => (
         <View key={it.id} style={s.item}>
           <View style={s.itemTop}>
             <Text style={s.itemName}>{it.name}</Text>
             <Text style={s.itemPrice}>{baht(it.price)}</Text>
             <Pressable
               style={s.delBtn}
-              onPress={() => confirmRemove(it.name, () => store.removeItem(bill.id, it.id))}
+              onPress={() => confirmRemove(it.name, () => removeItem(it.id))}
               accessibilityRole="button"
               accessibilityLabel={`ลบเมนู ${it.name}`}
             >
               <Text style={s.del}>✕</Text>
             </Pressable>
           </View>
-          {bill.splitMode === 'itemized' && (
+          {draft.splitMode === 'itemized' && (
             <>
               <Text style={s.hint}>
                 {it.participantIds.length === 0
@@ -273,7 +336,7 @@ export default function BillDetail() {
                   return (
                     <Pressable
                       key={m.id}
-                      onPress={() => store.toggleItemParticipant(bill.id, it.id, m.id)}
+                      onPress={() => toggleItemParticipant(it.id, m.id)}
                       style={[s.chipSmall, on && s.chipActive]}
                       {...a11y('checkbox', { checked: on })}
                       accessibilityLabel={`${m.name} กิน ${it.name}`}
@@ -301,24 +364,24 @@ export default function BillDetail() {
           c={c}
           label="Service %"
           a11yLabel="ค่าบริการ เปอร์เซ็นต์"
-          value={bill.serviceChargePct}
-          onChange={(n) => store.updateBill(bill.id, { serviceChargePct: n })}
+          value={draft.serviceChargePct}
+          onChange={(n) => patch({ serviceChargePct: n })}
         />
         <ChargeInput
           s={s}
           c={c}
           label="VAT %"
           a11yLabel="ภาษีมูลค่าเพิ่ม เปอร์เซ็นต์"
-          value={bill.vatPct}
-          onChange={(n) => store.updateBill(bill.id, { vatPct: n })}
+          value={draft.vatPct}
+          onChange={(n) => patch({ vatPct: n })}
         />
         <ChargeInput
           s={s}
           c={c}
           label="ส่วนลด ฿"
           a11yLabel="ส่วนลด บาท"
-          value={bill.discount}
-          onChange={(n) => store.updateBill(bill.id, { discount: n })}
+          value={draft.discount}
+          onChange={(n) => patch({ discount: n })}
         />
       </View>
 
@@ -338,7 +401,7 @@ export default function BillDetail() {
       <Text style={s.section}>ยอดต่อคนในบิลนี้</Text>
       {!!bd.soleBearerId && (
         <Text style={s.hint}>
-          {bill.isTreat
+          {draft.isTreat
             ? `🎁 ${payerName ?? 'คนออกเงิน'} เลี้ยงบิลนี้ — คนอื่นไม่ต้องหาร`
             : 'ไม่มีคนเข้าเงื่อนไขบิลนี้ — ยอดทั้งบิลตกเป็นของคนออกเงินคนเดียว'}
         </Text>
@@ -350,20 +413,76 @@ export default function BillDetail() {
       })}
       {bd.perMember.size === 0 && <Text style={s.hint}>ยังไม่มีคนเข้าเงื่อนไขบิลนี้</Text>}
 
+      {/* เตือนเมื่อบิลยังไม่สมบูรณ์ (ไม่เข้าสรุปจนกว่าจะครบ) */}
+      {issues.length > 0 && (
+        <View style={s.warnBox} accessibilityRole="alert">
+          <Text style={s.warnTitle}>บิลนี้ยังไม่เข้าสรุป</Text>
+          {issues.map((msg) => (
+            <Text key={msg} style={s.warnText}>
+              • {msg}
+            </Text>
+          ))}
+        </View>
+      )}
+
+      {/* บันทึก: เขียน draft ลง store — กดได้เมื่อมีการแก้ไข + เลือกคนออกเงิน + มีเมนูแล้ว */}
+      <Text style={s.hint}>{canSave ? 'มีการแก้ไขที่ยังไม่บันทึก' : saveBlock}</Text>
+      <Pressable
+        style={[s.saveBill, !canSave && s.btnDisabled]}
+        onPress={save}
+        disabled={!canSave}
+        {...a11y('button', { disabled: !canSave })}
+        accessibilityLabel="บันทึกบิล"
+        accessibilityHint={canSave ? undefined : saveBlock}
+      >
+        <Text style={s.saveBillText}>บันทึก</Text>
+      </Pressable>
+
       <Pressable
         style={s.deleteBill}
         onPress={() =>
-          confirmRemove(bill.name || 'บิลนี้', () => {
-            store.removeBill(bill.id);
+          confirmRemove(draft.name || 'บิลนี้', () => {
+            store.removeBill(draft.id);
             // ใช้ replace เพื่อไม่ให้ย้อนกลับมาหน้าบิลที่ถูกลบแล้ว (เข้าจาก deep link ก็ยังกลับได้)
             router.replace('/bills' as never);
           })
         }
         accessibilityRole="button"
-        accessibilityLabel={`ลบบิล ${bill.name || 'ไม่มีชื่อ'}`}
+        accessibilityLabel={`ลบบิล ${draft.name || 'ไม่มีชื่อ'}`}
       >
         <Text style={s.deleteBillText}>ลบบิลนี้</Text>
       </Pressable>
+
+      {/* popup หลังบันทึกสำเร็จ — เลือกไปหน้าถัดไป (component ในแอป) */}
+      <Modal
+        visible={savedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSavedModal(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>บันทึกบิลแล้ว ✅</Text>
+            <Text style={s.modalDesc}>จะไปหน้าไหนต่อดี?</Text>
+            <Pressable
+              style={s.modalPrimary}
+              onPress={() => goAfterSave('/summary')}
+              accessibilityRole="button"
+              accessibilityLabel="ไปหน้าสรุปหารเงิน"
+            >
+              <Text style={s.modalPrimaryText}>สรุปหารเงิน</Text>
+            </Pressable>
+            <Pressable
+              style={s.modalSecondary}
+              onPress={() => goAfterSave('/bills')}
+              accessibilityRole="button"
+              accessibilityLabel="ไปหน้าบิลทั้งหมด"
+            >
+              <Text style={s.modalSecondaryText}>บิลทั้งหมด</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -390,7 +509,7 @@ function ChargeInput({
   onChange: (n: number) => void;
 }>) {
   const [text, setText] = useState(String(value));
-  // ค่าจากภายนอกเปลี่ยน (เช่น เพื่อนในวงแก้) และไม่ตรงกับที่พิมพ์ค้างไว้ → sync ตาม
+  // ค่าจากภายนอกเปลี่ยน (เช่น เพื่อนในกลุ่มแก้) และไม่ตรงกับที่พิมพ์ค้างไว้ → sync ตาม
   useEffect(() => {
     setText((prev) => (num(prev) === value ? prev : String(value)));
   }, [value]);
@@ -552,7 +671,11 @@ const makeStyles = (c: Palette) => StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
+  // ยังไม่มีเมนูเลย → ตีกรอบปุ่ม + ให้เด่น ชวนให้กดเพิ่ม
+  addSmallHighlight: { borderColor: c.food },
   addBtnText: { color: c.onPrimary, fontWeight: '800', fontSize: 22 },
   item: {
     backgroundColor: c.card,
@@ -581,6 +704,54 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   sumLabel: { color: c.sub, fontSize: 14 },
   sumValue: { color: c.text, fontSize: 14 },
   sumBold: { color: c.text, fontWeight: '800', fontSize: 16 },
+  saveBill: {
+    marginTop: 16,
+    backgroundColor: c.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  saveBillText: { color: c.onPrimary, fontWeight: '800', fontSize: 16 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: c.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 20,
+    gap: 10,
+  },
+  modalTitle: { color: c.text, fontSize: 18, fontWeight: '800' },
+  modalDesc: { color: c.sub, fontSize: 14, marginBottom: 4 },
+  modalPrimary: {
+    backgroundColor: c.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  modalPrimaryText: { color: c.onPrimary, fontWeight: '800', fontSize: 16 },
+  modalSecondary: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  modalSecondaryText: { color: c.text, fontWeight: '700', fontSize: 16 },
   deleteBill: {
     marginTop: 24,
     borderWidth: 1,

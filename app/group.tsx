@@ -16,7 +16,7 @@ import { a11y, confirmAction, copyText, friendlyError, notify, Palette } from '.
 import { useTheme } from '../src/ui/theme';
 import { useStore } from '../src/data/store';
 
-/** ลิงก์เชิญเข้าวง — deep link ที่ expo-router จับที่ route join/[code] */
+/** ลิงก์เชิญเข้ากลุ่ม — deep link ที่ expo-router จับที่ route join/[code] */
 function inviteUrl(code: string): string {
   return Linking.createURL(`join/${code}`);
 }
@@ -49,7 +49,7 @@ export default function GroupScreen() {
   return <NoGroup onCreate={createGroup} onJoin={joinGroup} />;
 }
 
-/** ยังไม่อยู่วง: สร้างวงใหม่ หรือเข้าร่วมด้วยโค้ด */
+/** ยังไม่อยู่กลุ่ม: สร้างกลุ่มใหม่ หรือเข้าร่วมด้วยโค้ด */
 function NoGroup({
   onCreate,
   onJoin,
@@ -67,7 +67,7 @@ function NoGroup({
     try {
       await fn();
     } catch (e) {
-      // ใช้เหตุผลจริงจาก store (เช่น "ไม่พบวงจากโค้ดนี้") ถ้ามี ไม่ทับด้วยข้อความกลาง ๆ
+      // ใช้เหตุผลจริงจาก store (เช่น "ไม่พบกลุ่มจากโค้ดนี้") ถ้ามี ไม่ทับด้วยข้อความกลาง ๆ
       setErr(friendlyError(e, failMsg));
     } finally {
       setBusy(false);
@@ -80,28 +80,28 @@ function NoGroup({
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.form}>
-        <Text style={s.formTitle}>สร้างวงใหม่</Text>
-        <Text style={s.formDesc}>ชวนเพื่อนเข้าวงเดียวกันด้วย QR หรือลิงก์ แล้วช่วยกันแก้บิลแบบเรียลไทม์</Text>
+        <Text style={s.formTitle}>สร้างกลุ่มใหม่</Text>
+        <Text style={s.formDesc}>ชวนเพื่อนเข้ากลุ่มเดียวกันด้วย QR หรือลิงก์ แล้วช่วยกันแก้บิลแบบเรียลไทม์</Text>
         <TextInput
           value={groupName}
           onChangeText={setGroupName}
-          placeholder="ชื่อวง เช่น มื้อเย็นศุกร์นี้"
+          placeholder="ชื่อกลุ่ม เช่น มื้อเย็นศุกร์นี้"
           placeholderTextColor={c.sub}
           style={s.input}
           returnKeyType="done"
-          accessibilityLabel="ชื่อวง"
+          accessibilityLabel="ชื่อกลุ่ม"
         />
         <Pressable
           style={[s.primaryBtn, !canCreate && s.btnDisabled]}
-          onPress={() => run(() => onCreate(groupName), 'สร้างวงไม่สำเร็จ ตรวจอินเทอร์เน็ตแล้วลองใหม่')}
+          onPress={() => run(() => onCreate(groupName), 'สร้างกลุ่มไม่สำเร็จ ตรวจอินเทอร์เน็ตแล้วลองใหม่')}
           disabled={!canCreate}
           {...a11y('button', { disabled: !canCreate })}
-          accessibilityLabel="สร้างวงใหม่"
-          accessibilityHint={canCreate ? undefined : 'ตั้งชื่อวงก่อนจึงจะสร้างได้'}
+          accessibilityLabel="สร้างกลุ่มใหม่"
+          accessibilityHint={canCreate ? undefined : 'ตั้งชื่อกลุ่มก่อนจึงจะสร้างได้'}
         >
-          <Text style={s.primaryBtnText}>+ สร้างวง</Text>
+          <Text style={s.primaryBtnText}>+ สร้างกลุ่ม</Text>
         </Pressable>
-        <Text style={s.formDesc}>ข้อมูลสมาชิก/บิลที่มีในเครื่องอยู่แล้วจะถูกย้ายขึ้นวงให้</Text>
+        <Text style={s.formDesc}>ข้อมูลสมาชิก/บิลที่มีในเครื่องอยู่แล้วจะถูกย้ายขึ้นกลุ่มให้</Text>
       </View>
 
       <View style={s.form}>
@@ -116,17 +116,17 @@ function NoGroup({
           autoCorrect={false}
           style={[s.input, s.codeInput]}
           returnKeyType="go"
-          accessibilityLabel="โค้ดเชิญเข้าวง"
+          accessibilityLabel="โค้ดเชิญเข้ากลุ่ม"
         />
         <Pressable
           style={[s.secondaryBtn, !canJoin && s.btnDisabled]}
-          onPress={() => run(() => onJoin(code), 'เข้าร่วมไม่สำเร็จ — ตรวจโค้ดอีกครั้ง หรือวงอาจถูกปิดแล้ว')}
+          onPress={() => run(() => onJoin(code), 'เข้าร่วมไม่สำเร็จ — ตรวจโค้ดอีกครั้ง หรือกลุ่มอาจถูกปิดแล้ว')}
           disabled={!canJoin}
           {...a11y('button', { disabled: !canJoin })}
-          accessibilityLabel="เข้าร่วมวง"
+          accessibilityLabel="เข้าร่วมกลุ่ม"
           accessibilityHint={canJoin ? undefined : 'กรอกโค้ดเชิญอย่างน้อย 4 ตัวก่อน'}
         >
-          <Text style={s.secondaryBtnText}>เข้าร่วมวง</Text>
+          <Text style={s.secondaryBtnText}>เข้าร่วมกลุ่ม</Text>
         </Pressable>
       </View>
 
@@ -140,7 +140,7 @@ function NoGroup({
   );
 }
 
-/** อยู่ในวงแล้ว: โชว์ QR + ลิงก์ + รายชื่อคนในวง + ปุ่มออก */
+/** อยู่ในกลุ่มแล้ว: โชว์ QR + ลิงก์ + รายชื่อคนในกลุ่ม + ปุ่มออก */
 function InGroup({
   group,
   state,
@@ -160,7 +160,7 @@ function InGroup({
 
   // web: คัดลอกลิงก์ (Share sheet ไม่มีบนเว็บ), native: เปิด share sheet
   const share = async () => {
-    const message = `เข้าร่วมวง "${group.name}" ในหารเมา\nโค้ด: ${group.inviteCode}\n${url}`;
+    const message = `เข้าร่วมกลุ่ม "${group.name}" ในหารเมา\nโค้ด: ${group.inviteCode}\n${url}`;
     if (Platform.OS === 'web') {
       const ok = await copyText(url);
       if (ok) setCopied(true);
@@ -172,16 +172,16 @@ function InGroup({
     });
   };
 
-  // ออกจากวง: ตัวเราหลุดจากวง (ข้อมูลวงยังอยู่กับคนอื่น) — ยืนยันก่อน
+  // ออกจากกลุ่ม: ตัวเราหลุดจากกลุ่ม (ข้อมูลกลุ่มยังอยู่กับคนอื่น) — ยืนยันก่อน
   const onLeavePress = () => {
     confirmAction({
-      title: `ออกจากวง "${group.name}"?`,
-      message: 'คุณจะไม่เห็นข้อมูลวงนี้อีก (วงยังอยู่กับคนอื่น) และกลับไปใช้ข้อมูลในเครื่อง',
-      confirmLabel: 'ออกจากวง',
+      title: `ออกจากกลุ่ม "${group.name}"?`,
+      message: 'คุณจะไม่เห็นข้อมูลกลุ่มนี้อีก (กลุ่มยังอยู่กับคนอื่น) และกลับไปใช้ข้อมูลในเครื่อง',
+      confirmLabel: 'ออกจากกลุ่ม',
       onConfirm: () => {
         setLeaving(true);
         onLeave()
-          .catch((e) => notify('ออกจากวงไม่สำเร็จ', friendlyError(e, 'ลองใหม่อีกครั้ง')))
+          .catch((e) => notify('ออกจากกลุ่มไม่สำเร็จ', friendlyError(e, 'ลองใหม่อีกครั้ง')))
           .finally(() => setLeaving(false));
       },
     });
@@ -197,8 +197,8 @@ function InGroup({
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.form}>
         <Text style={s.groupName}>{group.name}</Text>
-        <Text style={s.formDesc}>ให้เพื่อนสแกน QR นี้ หรือเปิดลิงก์เพื่อเข้าวง</Text>
-        <View style={s.qrWrap} accessible accessibilityLabel={`คิวอาร์โค้ดเชิญเข้าวง ${group.name}`}>
+        <Text style={s.formDesc}>ให้เพื่อนสแกน QR นี้ หรือเปิดลิงก์เพื่อเข้ากลุ่ม</Text>
+        <View style={s.qrWrap} accessible accessibilityLabel={`คิวอาร์โค้ดเชิญเข้ากลุ่ม ${group.name}`}>
           <QRCode value={url} size={196} backgroundColor={c.surfaceLight} color={c.onLight} />
         </View>
         <View style={s.codeBox} accessible accessibilityLabel={`โค้ดเชิญ ${group.inviteCode}`}>
@@ -219,7 +219,7 @@ function InGroup({
       </View>
 
       <View style={s.form}>
-        <Text style={s.formTitle}>คนในวง ({state.members.length})</Text>
+        <Text style={s.formTitle}>คนในกลุ่ม ({state.members.length})</Text>
         {state.members.length === 0 && <Text style={s.formDesc}>ยังไม่มีสมาชิก — ไปหน้าสมาชิกเพื่อเพิ่ม</Text>}
         {state.members.map((m) => (
           <View key={m.id} style={s.memberRow}>
@@ -228,7 +228,7 @@ function InGroup({
           </View>
         ))}
         {!myMemberId && state.members.length > 0 && (
-          <Text style={s.formDesc}>ยังไม่ได้เลือกว่าคุณคือใครในวง — เลือกได้ที่แท็บ “ฉัน”</Text>
+          <Text style={s.formDesc}>ยังไม่ได้เลือกว่าคุณคือใครในกลุ่ม — เลือกได้ที่แท็บ “ฉัน”</Text>
         )}
       </View>
 
@@ -237,9 +237,9 @@ function InGroup({
         onPress={onLeavePress}
         disabled={leaving}
         {...a11y('button', { disabled: leaving })}
-        accessibilityLabel="ออกจากวง"
+        accessibilityLabel="ออกจากกลุ่ม"
       >
-        <Text style={s.leaveBtnText}>{leaving ? 'กำลังออกจากวง...' : 'ออกจากวง'}</Text>
+        <Text style={s.leaveBtnText}>{leaving ? 'กำลังออกจากกลุ่ม...' : 'ออกจากกลุ่ม'}</Text>
       </Pressable>
     </ScrollView>
   );

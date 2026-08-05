@@ -53,7 +53,7 @@ function Layout() {
           tabBarStyle: {
             backgroundColor: c.card,
             borderTopColor: c.border,
-            height: 62,
+            height: 68,
             paddingBottom: 8,
             paddingTop: 6,
           },
@@ -109,9 +109,9 @@ function Layout() {
         />
         {/* หน้ารายละเอียดบิล เข้าจากแท็บบิล ไม่ต้องโชว์เป็น tab */}
         <Tabs.Screen name="bill/[id]" options={{ href: null, title: 'รายละเอียดบิล' }} />
-        {/* หน้าวง (หลายคน) + เข้าร่วมผ่านลิงก์/QR — เข้าจากหน้าแรก ไม่ต้องโชว์เป็น tab */}
-        <Tabs.Screen name="group" options={{ href: null, title: 'วงหารเงิน' }} />
-        <Tabs.Screen name="join/[code]" options={{ href: null, title: 'เข้าร่วมวง' }} />
+        {/* หน้ากลุ่ม (หลายคน) + เข้าร่วมผ่านลิงก์/QR — เข้าจากหน้าแรก ไม่ต้องโชว์เป็น tab */}
+        <Tabs.Screen name="group" options={{ href: null, title: 'กลุ่มหารเงิน' }} />
+        <Tabs.Screen name="join/[code]" options={{ href: null, title: 'เข้าร่วมกลุ่ม' }} />
       </Tabs>
     </>
   );

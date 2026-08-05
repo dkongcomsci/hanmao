@@ -18,7 +18,7 @@ const OPTIONS: Consumes[] = ['both', 'food', 'drink'];
 
 type Phase = 'joining' | 'pick' | 'error';
 
-/** เข้าร่วมวงจากลิงก์/QR: hanmao://join/<code> → เลือกว่าเราคือใคร */
+/** เข้าร่วมกลุ่มจากลิงก์/QR: hanmao://join/<code> → เลือกว่าเราคือใคร */
 export default function JoinByCode() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function JoinByCode() {
   const [name, setName] = useState('');
   const [consumes, setConsumes] = useState<Consumes>('both');
   const [busy, setBusy] = useState(false);
-  const [joinErr, setJoinErr] = useState<string | null>(null); // สาเหตุที่เข้าวงไม่ได้ (แสดงในหน้า error)
+  const [joinErr, setJoinErr] = useState<string | null>(null); // สาเหตุที่เข้ากลุ่มไม่ได้ (แสดงในหน้า error)
   // สาเหตุที่ผูกตัวตนไม่ได้ + มาจากส่วนไหน (แสดงใกล้ปุ่มที่ผู้ใช้กดจริง)
   const [pickErr, setPickErr] = useState<{ where: 'claim' | 'new'; msg: string } | null>(null);
   const joinedRef = useRef(false); // กัน join ซ้ำเมื่อ component re-render
@@ -45,15 +45,15 @@ export default function JoinByCode() {
     joinedRef.current = true;
     (async () => {
       try {
-        // ถ้าอยู่วงนี้อยู่แล้ว (กลับเข้าลิงก์เดิม) ข้ามไปเลือกตัวตนได้เลย
+        // ถ้าอยู่กลุ่มนี้อยู่แล้ว (กลับเข้าลิงก์เดิม) ข้ามไปเลือกตัวตนได้เลย
         if (!(mode === 'group' && group?.inviteCode === code)) {
           await joinGroup(code);
         }
         setPhase('pick');
       } catch (e) {
-        // บอกสาเหตุจริงจาก store ถ้ามี (เช่น "ไม่พบวงจากโค้ดนี้") ไม่ใช่ขึ้นข้อความกลาง ๆ เฉย ๆ
+        // บอกสาเหตุจริงจาก store ถ้ามี (เช่น "ไม่พบกลุ่มจากโค้ดนี้") ไม่ใช่ขึ้นข้อความกลาง ๆ เฉย ๆ
         setJoinErr(
-          friendlyError(e, `เข้าวงจากโค้ด "${code}" ไม่สำเร็จ — วงอาจถูกปิดแล้ว หรือเชื่อมต่อไม่ได้`),
+          friendlyError(e, `เข้ากลุ่มจากโค้ด "${code}" ไม่สำเร็จ — กลุ่มอาจถูกปิดแล้ว หรือเชื่อมต่อไม่ได้`),
         );
         setPhase('error');
       }
@@ -61,13 +61,13 @@ export default function JoinByCode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, remoteEnabled]);
 
-  // ผูกตัวตนแล้วไปหน้าวง; ถ้าพลาดต้องบอกผู้ใช้ ไม่ใช่เงียบให้กดซ้ำมั่ว
+  // ผูกตัวตนแล้วไปหน้าสรุปหารเงิน; ถ้าพลาดต้องบอกผู้ใช้ ไม่ใช่เงียบให้กดซ้ำมั่ว
   const finish = async (where: 'claim' | 'new', fn: () => Promise<void>) => {
     setBusy(true);
     setPickErr(null);
     try {
       await fn();
-      router.replace('/group' as never);
+      router.replace('/summary' as never);
     } catch (e) {
       // เช่น ชื่อนี้ถูกคนอื่น claim ไปแล้ว — ต้องเห็นเหตุผลเพื่อรู้ว่าให้เลือกชื่ออื่น
       setPickErr({
@@ -93,7 +93,7 @@ export default function JoinByCode() {
     return (
       <View style={s.center}>
         <ActivityIndicator color={c.primary} size="large" />
-        <Text style={s.centerDesc}>กำลังเข้าร่วมวง…</Text>
+        <Text style={s.centerDesc}>กำลังเข้าร่วมกลุ่ม…</Text>
       </View>
     );
   }
@@ -102,13 +102,13 @@ export default function JoinByCode() {
       <Centered
         s={s}
         icon="⚠️"
-        title="เข้าร่วมวงไม่สำเร็จ"
+        title="เข้าร่วมกลุ่มไม่สำเร็จ"
         desc={
           code
-            ? (joinErr ?? `ไม่พบวงจากโค้ด "${code}" — วงอาจถูกปิดแล้ว หรือเชื่อมต่อไม่ได้`)
-            : 'ลิงก์เชิญไม่มีโค้ดวง — ขอลิงก์ใหม่จากคนที่ชวน'
+            ? (joinErr ?? `ไม่พบกลุ่มจากโค้ด "${code}" — กลุ่มอาจถูกปิดแล้ว หรือเชื่อมต่อไม่ได้`)
+            : 'ลิงก์เชิญไม่มีโค้ดกลุ่ม — ขอลิงก์ใหม่จากคนที่ชวน'
         }
-        action={{ label: 'กลับหน้าวง', onPress: () => router.replace('/group' as never) }}
+        action={{ label: 'กลับหน้ากลุ่ม', onPress: () => router.replace('/group' as never) }}
       />
     );
   }
@@ -118,7 +118,7 @@ export default function JoinByCode() {
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <Text style={s.title}>เข้าร่วม “{group?.name ?? ''}” แล้ว 🎉</Text>
-      <Text style={s.subtitle}>คุณคือใครในวงนี้?</Text>
+      <Text style={s.subtitle}>คุณคือใครในกลุ่มนี้?</Text>
 
       {state.members.length > 0 && (
         <View style={s.form}>
