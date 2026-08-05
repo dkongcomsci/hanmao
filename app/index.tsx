@@ -1,13 +1,19 @@
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { computeTotals } from '../src/domain/split';
-import { baht, colors } from '../src/ui';
+import { baht, Palette } from '../src/ui';
+import { useTheme } from '../src/ui/theme';
 import { useStore } from '../src/data/store';
 
 export default function Home() {
   const { state, mode, group, remoteEnabled } = useStore();
+  const { colors: c } = useTheme();
+  const s = useMemo(() => makeStyles(c), [c]);
   const router = useRouter();
-  const { grandTotal } = computeTotals(state);
+  // เวลาอ้างอิงเดียวสำหรับทั้ง render (บิลโหมด "หารตามเวลา" ต้องใช้ค่าเดียวกันทุกจุด)
+  const now = Date.now();
+  const { grandTotal } = computeTotals(state, now);
   const here = state.members.filter((m) => !m.leftAt).length;
 
   const hasMembers = state.members.length > 0;
@@ -53,9 +59,9 @@ export default function Home() {
       {isNew && (
         <View style={s.onboard}>
           <Text style={s.onboardTitle}>เริ่มใช้งานใน 3 ขั้น 👋</Text>
-          <Step n={1} title="เพิ่มสมาชิก" desc="ใครร่วมวงบ้าง กินอาหารหรือเครื่องดื่ม" />
-          <Step n={2} title="สร้างบิล" desc="ใส่เมนู เลือกคนจ่าย และวิธีหาร" />
-          <Step n={3} title="ดูสรุป" desc="ใครจ่ายเท่าไร ใครโอนให้ใคร" />
+          <Step s={s} n={1} title="เพิ่มสมาชิก" desc="ใครร่วมวงบ้าง กินอาหารหรือเครื่องดื่ม" />
+          <Step s={s} n={2} title="สร้างบิล" desc="ใส่เมนู เลือกคนจ่าย และวิธีหาร" />
+          <Step s={s} n={3} title="ดูสรุป" desc="ใครจ่ายเท่าไร ใครโอนให้ใคร" />
           <Pressable
             style={s.cta}
             onPress={() => router.push('/members' as never)}
@@ -71,25 +77,28 @@ export default function Home() {
       {!isNew && (
         <>
           <NavCard
+            s={s}
             onPress={() => router.push('/members' as never)}
             icon="👥"
             title="สมาชิก"
             desc={hasMembers ? `${state.members.length} คน` : 'ยังไม่มีสมาชิก — แตะเพื่อเพิ่ม'}
-            accent={colors.food}
+            accent={c.food}
           />
           <NavCard
+            s={s}
             onPress={() => router.push('/bills' as never)}
             icon="🧾"
             title="บิลทั้งหมด"
             desc={hasBills ? `${state.bills.length} บิล` : 'ยังไม่มีบิล — แตะเพื่อสร้าง'}
-            accent={colors.drink}
+            accent={c.drink}
           />
           <NavCard
+            s={s}
             onPress={() => router.push('/summary' as never)}
             icon="💰"
             title="สรุปหารเงิน"
             desc="ยอดต่อคน + ใครโอนให้ใคร"
-            accent={colors.primary}
+            accent={c.primary}
           />
         </>
       )}
@@ -97,7 +106,9 @@ export default function Home() {
   );
 }
 
-function Step({ n, title, desc }: Readonly<{ n: number; title: string; desc: string }>) {
+type Styles = ReturnType<typeof makeStyles>;
+
+function Step({ s, n, title, desc }: Readonly<{ s: Styles; n: number; title: string; desc: string }>) {
   return (
     <View style={s.step}>
       <View style={s.stepNum}>
@@ -112,12 +123,14 @@ function Step({ n, title, desc }: Readonly<{ n: number; title: string; desc: str
 }
 
 function NavCard({
+  s,
   onPress,
   icon,
   title,
   desc,
   accent,
 }: Readonly<{
+  s: Styles;
   onPress: () => void;
   icon: string;
   title: string;
@@ -142,67 +155,67 @@ function NavCard({
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: Palette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   content: { padding: 16, gap: 12 },
   hero: {
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 20,
     padding: 24,
     marginBottom: 4,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
-  heroLabel: { color: colors.sub, fontSize: 14 },
-  heroValue: { color: colors.text, fontSize: 40, fontWeight: '800', marginVertical: 4 },
-  heroSub: { color: colors.sub, fontSize: 13 },
+  heroLabel: { color: c.sub, fontSize: 14 },
+  heroValue: { color: c.text, fontSize: 40, fontWeight: '800', marginVertical: 4 },
+  heroSub: { color: c.sub, fontSize: 13 },
   groupBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     padding: 14,
   },
   groupIcon: { fontSize: 22 },
-  groupTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  groupDesc: { color: colors.sub, fontSize: 12, marginTop: 2 },
+  groupTitle: { color: c.text, fontSize: 16, fontWeight: '700' },
+  groupDesc: { color: c.sub, fontSize: 12, marginTop: 2 },
   onboard: {
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 18,
     gap: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
-  onboardTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
+  onboardTitle: { color: c.text, fontSize: 18, fontWeight: '800' },
   step: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   stepNum: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepNumText: { color: '#fff', fontWeight: '800' },
-  stepTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  stepDesc: { color: colors.sub, fontSize: 13 },
+  stepNumText: { color: c.onPrimary, fontWeight: '800' },
+  stepTitle: { color: c.text, fontSize: 15, fontWeight: '700' },
+  stepDesc: { color: c.sub, fontSize: 13 },
   cta: {
-    backgroundColor: colors.primary,
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
   },
-  ctaText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  ctaText: { color: c.onPrimary, fontWeight: '800', fontSize: 16 },
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
@@ -210,7 +223,7 @@ const s = StyleSheet.create({
   accent: { width: 6, alignSelf: 'stretch' },
   cardIcon: { fontSize: 24, marginLeft: 14 },
   cardBody: { padding: 16, flex: 1 },
-  cardTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
-  cardDesc: { color: colors.sub, fontSize: 13, marginTop: 4 },
-  chevron: { color: colors.sub, fontSize: 28, paddingRight: 16 },
+  cardTitle: { color: c.text, fontSize: 18, fontWeight: '700' },
+  cardDesc: { color: c.sub, fontSize: 13, marginTop: 4 },
+  chevron: { color: c.sub, fontSize: 28, paddingRight: 16 },
 });

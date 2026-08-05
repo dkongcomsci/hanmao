@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -8,13 +8,24 @@ import {
   View,
 } from 'react-native';
 import { Consumes } from '../src/domain/types';
-import { colors, confirmRemove, consumesLabel, formatPromptPay, isValidPromptPay, timeStr } from '../src/ui';
+import {
+  a11y,
+  confirmRemove,
+  consumesLabel,
+  formatPromptPay,
+  isValidPromptPay,
+  Palette,
+  timeStr,
+} from '../src/ui';
+import { useTheme } from '../src/ui/theme';
 import { useStore } from '../src/data/store';
 
 const OPTIONS: Consumes[] = ['both', 'food', 'drink'];
 
 export default function Members() {
   const { state, addMember, updateMember, removeMember, toggleArrived, toggleLeft } = useStore();
+  const { colors: c } = useTheme();
+  const s = useMemo(() => makeStyles(c), [c]);
   const [name, setName] = useState('');
   const [consumes, setConsumes] = useState<Consumes>('both');
   const [promptPay, setPromptPay] = useState('');
@@ -37,7 +48,7 @@ export default function Members() {
           value={name}
           onChangeText={setName}
           placeholder="ชื่อสมาชิก"
-          placeholderTextColor={colors.sub}
+          placeholderTextColor={c.sub}
           style={s.input}
           onSubmitEditing={submit}
           returnKeyType="done"
@@ -47,7 +58,7 @@ export default function Members() {
         <Text style={s.fieldLabel}>กินอะไร</Text>
         <View style={s.chips}>
           {OPTIONS.map((o) => (
-            <Chip key={o} label={consumesLabel[o]} active={consumes === o} onPress={() => setConsumes(o)} />
+            <Chip key={o} s={s} label={consumesLabel[o]} active={consumes === o} onPress={() => setConsumes(o)} />
           ))}
         </View>
         <Text style={s.fieldLabel}>พร้อมเพย์ (ไม่บังคับ)</Text>
@@ -55,7 +66,7 @@ export default function Members() {
           value={promptPay}
           onChangeText={setPromptPay}
           placeholder="เบอร์มือถือ หรือ เลขบัตร ปชช."
-          placeholderTextColor={colors.sub}
+          placeholderTextColor={c.sub}
           keyboardType="number-pad"
           style={[s.input, !ppValid && s.inputError]}
           accessibilityLabel="พร้อมเพย์ เบอร์มือถือหรือเลขบัตรประชาชน"
@@ -65,8 +76,7 @@ export default function Members() {
           style={[s.addBtn, !canAdd && s.addBtnDisabled]}
           onPress={submit}
           disabled={!canAdd}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canAdd }}
+          {...a11y('button', { disabled: !canAdd })}
           accessibilityLabel="เพิ่มสมาชิก"
           accessibilityHint={canAdd ? undefined : 'พิมพ์ชื่อก่อนจึงจะเพิ่มได้'}
         >
@@ -90,6 +100,7 @@ export default function Members() {
               {OPTIONS.map((o) => (
                 <Chip
                   key={o}
+                  s={s}
                   label={consumesLabel[o]}
                   active={m.consumes === o}
                   small
@@ -101,24 +112,33 @@ export default function Members() {
               มา {timeStr(m.arrivedAt)} · กลับ {timeStr(m.leftAt)}
             </Text>
             <PromptPayEdit
+              s={s}
+              c={c}
+              name={m.name}
               value={m.promptPay ?? ''}
               onSave={(v) => updateMember(m.id, { promptPay: v || null })}
             />
           </View>
           <View style={s.actions}>
             <TinyBtn
+              s={s}
+              c={c}
               label={m.arrivedAt ? '✓ มาแล้ว' : 'มาถึง'}
               active={!!m.arrivedAt}
-              color={colors.good}
+              color={c.good}
+              toggle
               onPress={() => toggleArrived(m.id)}
             />
             <TinyBtn
+              s={s}
+              c={c}
               label={m.leftAt ? '✓ กลับแล้ว' : 'กลับ'}
               active={!!m.leftAt}
-              color={colors.food}
+              color={c.food}
+              toggle
               onPress={() => toggleLeft(m.id)}
             />
-            <TinyBtn label="ลบ" color={colors.danger} onPress={() => confirmRemove(m.name, () => removeMember(m.id))} />
+            <TinyBtn s={s} c={c} label="ลบ" color={c.danger} onPress={() => confirmRemove(m.name, () => removeMember(m.id))} />
           </View>
         </View>
       ))}
@@ -126,34 +146,54 @@ export default function Members() {
   );
 }
 
+type Styles = ReturnType<typeof makeStyles>;
+
 /** แก้พร้อมเพย์ของสมาชิกแบบ inline (เก็บเมื่อออกจากช่อง) */
-function PromptPayEdit({ value, onSave }: Readonly<{ value: string; onSave: (v: string) => void }>) {
+function PromptPayEdit({
+  s,
+  c,
+  name,
+  value,
+  onSave,
+}: Readonly<{ s: Styles; c: Palette; name: string; value: string; onSave: (v: string) => void }>) {
   const [text, setText] = useState(value);
+  // ค่าจากภายนอกเปลี่ยน (เพื่อนในวงแก้ผ่าน realtime) และเราไม่ได้พิมพ์ค้างไว้ → sync ตาม
+  useEffect(() => {
+    setText((prev) => (prev.trim() === value.trim() ? prev : value));
+  }, [value]);
+
   const valid = isValidPromptPay(text);
+  const save = () => {
+    if (valid && text.trim() !== value) onSave(text.trim());
+  };
+
   return (
     <View style={{ marginTop: 6, gap: 2 }}>
       <Text style={s.ppLabel}>พร้อมเพย์: {value ? formatPromptPay(value) : '— ยังไม่ระบุ'}</Text>
       <TextInput
         value={text}
         onChangeText={setText}
-        onEndEditing={() => valid && text.trim() !== value && onSave(text.trim())}
-        onBlur={() => valid && text.trim() !== value && onSave(text.trim())}
+        onEndEditing={save}
+        onBlur={save}
         placeholder="เบอร์มือถือ / เลขบัตร ปชช."
-        placeholderTextColor={colors.sub}
+        placeholderTextColor={c.sub}
         keyboardType="number-pad"
         style={[s.ppInput, !valid && s.inputError]}
-        accessibilityLabel="แก้พร้อมเพย์"
+        accessibilityLabel={`แก้พร้อมเพย์ของ ${name}`}
       />
+      {!valid && <Text style={s.errorText}>ต้องเป็นเบอร์มือถือ 10 หลัก หรือ เลขบัตร 13 หลัก</Text>}
     </View>
   );
 }
 
 function Chip({
+  s,
   label,
   active,
   small,
   onPress,
 }: Readonly<{
+  s: Styles;
   label: string;
   active: boolean;
   small?: boolean;
@@ -163,8 +203,7 @@ function Chip({
     <Pressable
       onPress={onPress}
       style={[s.chip, active && s.chipActive, small && s.chipSmall]}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+      {...a11y('button', { selected: active })}
       accessibilityLabel={label}
     >
       <Text style={[s.chipText, active && s.chipTextActive, small && { fontSize: 12 }]}>{label}</Text>
@@ -173,54 +212,61 @@ function Chip({
 }
 
 function TinyBtn({
+  s,
+  c,
   label,
   color,
   active,
+  toggle,
   onPress,
 }: Readonly<{
+  s: Styles;
+  c: Palette;
   label: string;
   color: string;
   active?: boolean;
+  /** เป็นปุ่มสองสถานะไหม (มา/กลับ) — ถ้าใช่ประกาศเป็น checkbox ให้ screen reader รู้สถานะ */
+  toggle?: boolean;
   onPress: () => void;
 }>) {
   return (
     <Pressable
       onPress={onPress}
       style={[s.tiny, { borderColor: color }, active && { backgroundColor: color }]}
-      accessibilityRole="button"
+      {...(toggle ? a11y('checkbox', { checked: !!active }) : a11y('button'))}
       accessibilityLabel={label}
     >
-      <Text style={[s.tinyText, { color: active ? '#0b0d10' : color }]}>{label}</Text>
+      <Text style={[s.tinyText, { color: active ? c.onLight : color }]}>{label}</Text>
     </Pressable>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (c: Palette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: c.bg },
   content: { padding: 16, gap: 12 },
   form: {
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
   input: {
-    backgroundColor: colors.cardAlt,
-    color: colors.text,
+    backgroundColor: c.cardAlt,
+    color: c.text,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
   },
-  fieldLabel: { color: colors.sub, fontSize: 13, fontWeight: '600' },
-  inputError: { borderWidth: 1, borderColor: colors.danger },
-  errorText: { color: colors.danger, fontSize: 12 },
-  ppLabel: { color: colors.sub, fontSize: 12 },
+  fieldLabel: { color: c.sub, fontSize: 13, fontWeight: '600' },
+  inputError: { borderWidth: 1, borderColor: c.danger },
+  errorText: { color: c.danger, fontSize: 12 },
+  ppLabel: { color: c.sub, fontSize: 12 },
   ppInput: {
-    backgroundColor: colors.cardAlt,
-    color: colors.text,
+    backgroundColor: c.cardAlt,
+    color: c.text,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -231,18 +277,25 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: colors.cardAlt,
+    backgroundColor: c.cardAlt,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
   chipSmall: { paddingVertical: 5, paddingHorizontal: 10 },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.sub, fontSize: 14 },
-  chipTextActive: { color: '#fff', fontWeight: '700' },
-  addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+  chipText: { color: c.sub, fontSize: 14 },
+  chipTextActive: { color: c.onPrimary, fontWeight: '700' },
+  addBtn: {
+    backgroundColor: c.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   addBtnDisabled: { opacity: 0.4 },
-  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  empty: { color: colors.sub, textAlign: 'center', marginTop: 20 },
+  addBtnText: { color: c.onPrimary, fontWeight: '700', fontSize: 16 },
+  empty: { color: c.sub, textAlign: 'center', marginTop: 20 },
   emptyBox: {
     alignItems: 'center',
     gap: 6,
@@ -250,19 +303,19 @@ const s = StyleSheet.create({
     paddingHorizontal: 24,
   },
   emptyIcon: { fontSize: 44 },
-  emptyTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  emptyDesc: { color: colors.sub, fontSize: 13, textAlign: 'center' },
+  emptyTitle: { color: c.text, fontSize: 16, fontWeight: '700' },
+  emptyDesc: { color: c.sub, fontSize: 13, textAlign: 'center' },
   row: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: c.card,
     borderRadius: 14,
     padding: 14,
     gap: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
-  name: { color: colors.text, fontSize: 17, fontWeight: '700', marginBottom: 6 },
-  time: { color: colors.sub, fontSize: 12, marginTop: 6 },
+  name: { color: c.text, fontSize: 17, fontWeight: '700', marginBottom: 6 },
+  time: { color: c.sub, fontSize: 12, marginTop: 6 },
   actions: { gap: 6, justifyContent: 'center' },
   tiny: {
     borderWidth: 1,

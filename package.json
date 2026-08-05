@@ -29,6 +29,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/react": "~19.2.2",
+    "tsx": "4.20.3",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -37,7 +38,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:unit": "node --import tsx --import ./tests/unit/reg.ts --test \"tests/unit/**/*.test.ts\"",
+    "test": "npm run test:unit && npm run test:e2e",
+    "agents:log": "touch .claude/agent-activity.log && tail -f .claude/agent-activity.log"
   },
   "private": true
 }

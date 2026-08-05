@@ -8,8 +8,9 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 
 ## ขอบเขต
 
-**แก้ได้:** [src/data/store.tsx](../../src/data/store.tsx), [src/data/remote.ts](../../src/data/remote.ts), [src/data/supabase.ts](../../src/data/supabase.ts), `infra/supabase/*.sql`, `src/utils/id.ts`
-**ห้ามแตะ:** `app/**`, `src/ui/**`, `src/domain/split.ts`, `tests/**`
+**แก้ได้:** [src/data/store.tsx](../../src/data/store.tsx), [src/data/remote.ts](../../src/data/remote.ts), [src/data/supabase.ts](../../src/data/supabase.ts), `infra/supabase/**`
+**ห้ามแตะ:** `app/**`, `src/ui/**`, `src/domain/**`, `src/utils/**`, `tests/**`
+`src/utils/id.ts` (`uuid()`, `inviteCode()`) เป็นของ `hanmao-domain` — ใช้ได้แต่ถ้าต้องแก้ **ให้รายงานกลับ**
 ถ้าต้องเพิ่มฟิลด์ใน `src/domain/types.ts` → **รายงานกลับ** ให้ `hanmao-domain` ทำ (หรือถ้าหัวหน้าทีมสั่งให้คุณทำเอง ให้แก้เฉพาะฟิลด์ที่ตกลงไว้ ห้ามแตะสูตรใน split.ts)
 
 ## สถาปัตยกรรมที่ต้องรักษา
@@ -24,6 +25,11 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 - ไม่มี env Supabase → `supabase` เป็น `null`, `remoteEnabled = false` → **แอปต้องยังทำงาน local ได้ปกติ** (E2E พึ่งข้อนี้)
 - `remote.ts` ทำหน้าที่ map row ↔ โดเมน (snake_case ↔ camelCase) + `subscribeGroup` + `fetchGroupState` ที่ประกอบ rows กลับเป็น `AppState` (items ซ้อนใน bill) ให้ `split.ts` ใช้ต่อได้ทันที
 - id ใช้ `uuid()` จาก `src/utils/id.ts` (กันชนเมื่อหลายเครื่องสร้างพร้อมกัน) — `addBill` ต้องคืน id แบบ sync ได้
+- **`settlements`**: group mode แก้ผ่าน RPC `settlement_toggle` / `settlements_prune` (atomic ฝั่ง Postgres) และมี fallback เขียนทั้ง array เมื่อ DB ยังไม่มีฟังก์ชัน (`PGRST202`/`42883`)
+- **prune อัตโนมัติ**: mutation ที่กระทบยอดต้องผ่าน `commitPrune` (เรียก `pruneSettlements()` ให้เอง) — **prune ทุกเคสแล้ว รวมบิลโหมด `time` ที่ยังมีคนไม่กลับ** เพราะ `settleUp` ติด `stamp` ให้รายการที่ยอดลอย ⇒ `transferKey` นิ่งข้าม `asOf` ที่ต่างกัน (ข้อยกเว้นเดิมถูกยกเลิก ดู [ADR 0006](../../docs/adr/0006-stable-settle-topology.md))
+- **ทุก query ที่คืนหลายแถวต้องเรียงนิ่ง** — `.order(<เวลา>)` + tiebreak `id` (`selectOrdered()` มี fallback สำหรับ project เก่าที่ไม่มีคอลัมน์เวลา) แล้ว **เรียงซ้ำฝั่ง client** ด้วย `sortByTimeThenId` เป็นด่านสุดท้าย; insert หลายแถวในคำสั่งเดียว (migrate ตอน `createGroup`) ต้องส่ง `created_at` เองด้วย `seqStamp()` ไล่ทีละ 1 ms เพราะ **`now()` ของ Postgres คงที่ทั้งทรานแซกชัน**
+  ลำดับแถวไม่ใช่เรื่องความสวยงาม — มันกระทบการเกลี่ยเศษสตางค์ ⇒ สองเครื่องเห็นคู่โอน/ติ๊ก "โอนแล้ว" ไม่ตรงกัน ([ADR 0002 ภาคผนวก](../../docs/adr/0002-integer-cents-largest-remainder.md))
+- **`isHost`** = `groups.created_by` ตรงกับ uid ปัจจุบัน (local mode = `true` เสมอ) → ตัดสินว่า `closeGroup()` ลบวงทั้งวงหรือแค่ถอนตัวเอง; ลบวงได้เฉพาะ host เพราะ RLS บังคับ ([ADR 0005](../../docs/adr/0005-group-host-and-rpc-only-join.md))
 
 ## กฎที่ห้ามละเมิด
 
@@ -38,4 +44,9 @@ tools: Read, Edit, Write, Grep, Glob, Bash
 
 1. `npx tsc --noEmit` ผ่าน
 2. ตรวจว่า **local mode ยังทำงานได้โดยไม่มี env** (E2E รันโหมดนี้)
-3. รายงาน: signature ของ API ที่เพิ่ม/เปลี่ยน (ให้ frontend เอาไปใช้), ไฟล์ patch SQL ที่ผู้ใช้ต้องไปรันใน Supabase SQL Editor, และผลกระทบต่อ state เดิม
+3. รายงานตามรูปแบบ [รายงานกลับหัวหน้าทีม](README.md#รายงานกลับหัวหน้าทีม) และต้องมี:
+   signature ของ API ที่เพิ่ม/เปลี่ยน (ให้ frontend เอาไปใช้), ไฟล์ patch SQL ที่ผู้ใช้ต้องไปรันใน Supabase SQL Editor, และผลกระทบต่อ state เดิม
+   **SQL ที่คุณเขียนยังไม่เคยรันกับ Postgres จริง** — ต้องบอกผู้ใช้ตรง ๆ ว่ายังไม่ได้ทดสอบ ห้ามรายงานเหมือนใช้ได้แล้ว
+   **ถ้าเทสแดง: หยุด รายงาน ห้ามไล่แก้ต่อเอง** (แดงกี่เคส/ทั้งหมด + คาด vs ได้จริง + ใครผิด) ให้ผู้ใช้ตัดสิน
+4. ถ้าเพิ่ม patch SQL หรือขั้นตอนที่ผู้ใช้ต้องทำมือ (เปิด provider, ตั้งค่า console) → บอกให้ `hanmao-docs` ไปเติมใน
+   [../../README.md](../../README.md) หัวข้อ "ขั้นตอนที่ต้องทำมือ" และ [../../infra/supabase/README.md](../../infra/supabase/README.md)

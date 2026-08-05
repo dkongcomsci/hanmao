@@ -12,9 +12,11 @@ tools: Read, Grep, Glob, Bash
 2. **รันจริง ตามลำดับ**:
    ```bash
    npx tsc --noEmit                  # ต้องผ่าน
-   npm run test:e2e                  # ถ้าแตะ app/** หรือ src/**
    npx expo export --platform web    # ถ้าแตะ import/native module
    ```
+   แล้วรันชุดเทสที่เกี่ยวข้อง — คำสั่งที่เป็นปัจจุบันดูใน `package.json` (`scripts`) และ
+   [tests/e2e/README.md](../../tests/e2e/README.md) / [tests/unit/README.md](../../tests/unit/README.md)
+   (โดเมน/utils/ui มีเทส logic แยกจาก E2E — แตะ `src/domain/**` หรือ `src/utils/**` ต้องรันชุด unit ด้วย)
 3. **ตรวจกฎโปรเจกต์** (ดูรายการด้านล่าง)
 4. **รายงาน** เรียงตามความรุนแรง
 
@@ -24,7 +26,14 @@ tools: Read, Grep, Glob, Bash
 - `paidById` = คนออกเงินของแต่ละบิล **แต่ละบิลอาจคนละคน** — มีที่ไหนสมมติว่าคนจ่ายคนเดียวทั้งวงไหม
 - `*Ids` array ว่าง = "ทุกคนที่เข้าเงื่อนไข" — มีโค้ดใหม่ที่ตีความว่าง = "ไม่มีใคร" หรือเติม id ทุกคนลงไปแทนไหม (`bill.memberIds`, `item.participantIds`)
 - ตรรกะการหารรั่วออกจาก `src/domain/split.ts` ไปอยู่ใน component หรือ store ไหม
-- `split.ts` ยัง pure อยู่ไหม (ไม่แตะ storage/Platform/network)
+- `split.ts` ยัง pure อยู่ไหม (ไม่แตะ storage/Platform/network) และ **ไม่มี `Date.now()`** — เวลาต้องมาทาง `asOf`
+  ฝั่งผู้เรียกต้องหาเวลา **ครั้งเดียวต่อ render** แล้วส่งค่าเดียวกันเข้าทุก call (ดู [.claude/rules/domain.md](../rules/domain.md))
+- คิดเงินบนสตางค์จำนวนเต็ม + เกลี่ยเศษ largest remainder — มีใครเอา threshold ลอย ๆ (`0.005`) กลับมาไหม
+- key ของรายการโอนสร้างด้วย `transferKey()` เท่านั้น (**มี 2 รูปแบบ**: ผูกยอด/ผูกคู่คน+`stamp`) — มีที่ไหนต่อสตริง `from>to` เองไหม; เช็กเคลียร์หมดด้วย `nothingOwed()`
+- **ผลลัพธ์ขึ้นกับลำดับแถวใน array ไหม** — มี tiebreak ที่ใช้ index/ตำแหน่งแถว, `localeCompare` ในเลเยอร์โดเมน,
+  หรือบวก float ตรง ๆ (`reduce((s,x)=>s+x)`) ในเส้นทางคิดเงินแทน `sumStable()` ไหม
+  ตรวจง่าย: สลับลำดับ `members` แล้วยอด/net/คู่โอน/key ต้องเท่าเดิมทุกทศนิยม ([ADR 0002 ภาคผนวก](../../docs/adr/0002-integer-cents-largest-remainder.md))
+- `settleUp` มี 2 โหมด (greedy / star ตอนยอดลอย) — โค้ดใหม่สมมติว่า "จำนวนโอนน้อยที่สุดเสมอ" ไหม
 - ยอดรวมต่อคนบวกกันแล้วเท่ากับ `total` ของบิลไหม (เงินไม่หาย/ไม่งอก) — ลองคิดเคสจริง
 
 **หน้าจอ**
@@ -32,7 +41,9 @@ tools: Read, Grep, Glob, Bash
 - แสดงเงินโดยไม่ผ่าน `baht()`
 - เรียก AsyncStorage/Supabase ตรง ๆ ใน component แทน `useStore()`
 - ปุ่มที่กดแล้วเงียบ (ควร `disabled` + หรี่ opacity)
-- ลบข้อมูลโดยไม่ผ่าน `confirmRemove()`
+- ลบข้อมูลโดยไม่ผ่าน `confirmRemove()` / การยืนยันแบบเขียนข้อความเองไม่ผ่าน `confirmAction()`
+- error จาก store ถูกกลืนเงียบ (ต้องขึ้นให้ผู้ใช้เห็นผ่าน `friendlyError()` + `notify()`)
+- การ์ดที่ export เป็นรูป (`shareCard` ใน `app/summary.tsx`) มีข้อมูลส่วนบุคคล เช่น เบอร์พร้อมเพย์ หลุดเข้าไปไหม ([ADR 0004](../../docs/adr/0004-no-promptpay-in-shared-image.md))
 - ขาด `accessibilityRole`/`accessibilityLabel` (+ `accessibilityState` เมื่อ selected/disabled/checked); hit target < 40px
 - empty state ไม่ตรงรูปแบบเดิม (emoji + หัวข้อ + คำแนะนำ)
 - ฟีเจอร์ native ไม่เช็ก `Platform.OS !== 'web'`
@@ -55,9 +66,10 @@ tools: Read, Grep, Glob, Bash
 ```
 สรุป: ผ่าน / ต้องแก้ก่อนปิดงาน
 
-ผลรัน
+ผลรัน (ตัวเลขจริงจากที่รันเอง)
 - tsc: ผ่าน/ไม่ผ่าน (ถ้าไม่ผ่าน ใส่ error จริง)
-- e2e: x ผ่าน / y แดง (ชื่อเทสที่แดง + อาการ)
+- unit: x ผ่าน / N ทั้งหมด (แดง y, todo z)
+- e2e: x ผ่าน / N ทั้งหมด (ชื่อเทสที่แดง + อาการ)
 - expo export: ผ่าน/ไม่ผ่าน/ไม่ได้รัน (เพราะอะไร)
 
 ต้องแก้ (blocker)
@@ -71,3 +83,9 @@ tools: Read, Grep, Glob, Bash
 ```
 
 **รายงานตามจริงเสมอ** — ถ้าเทสแดงต้องบอกว่าแดงพร้อม output จริง ถ้าข้ามขั้นตอนไหนต้องบอกว่าข้าม อย่าสรุปว่า "ผ่าน" จากการอ่านโค้ดโดยไม่ได้รัน
+
+**ห้ามลอกตัวเลขจาก agent อื่น** — ถ้า `hanmao-domain`/`hanmao-test` บอกว่า "เทสเขียว 179/179" หน้าที่คุณคือ
+**รันเองแล้วอ่านผลเอง** เพราะคุณเป็นด่านสุดท้ายก่อนถึงมือผู้ใช้ (เคยเกิดจริง: ตัวเลขที่ agent รายงานต่อกันมาไม่ตรงของจริง)
+
+**ห้ามเสนอ "แก้ให้เลย" เมื่อเจอเคสแดง** — คุณแก้ไฟล์ไม่ได้อยู่แล้ว และกฎของทีมคือ
+เคสแดงต้อง **รายงานผู้ใช้ก่อนใครไปแก้** ให้ระบุแค่ว่า *ใครควรแก้ + แก้อะไร* แล้วปล่อยให้ผู้ใช้ตัดสิน
