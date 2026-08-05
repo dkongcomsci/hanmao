@@ -34,7 +34,7 @@ type Store = {
   state: AppState;
   ready: boolean;
   // ---- theme (device preference; ไม่ผูกกับ local/group mode, ไม่ sync ขึ้น server) ----
-  /** ธีมปัจจุบันของเครื่องนี้ (ค่าเริ่มต้น 'dark') */
+  /** ธีมปัจจุบันของเครื่องนี้ (ค่าเริ่มต้น 'light') */
   theme: Theme;
   /** สลับ light↔dark */
   toggleTheme: () => void;
@@ -150,7 +150,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
   const [isHost, setIsHost] = useState(true);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
   // theme เป็น state แยกใน provider (device preference) ไม่แตะ AppState/Supabase
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>('light');
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   // ให้ mutation ใน group mode อ่าน groupId ล่าสุดได้โดยไม่ผูกกับ closure เก่า
@@ -190,7 +190,7 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         // "ฉันคือใคร" ในโหมด local (group mode จะถูก override ตอน enterGroup)
         const me = await AsyncStorage.getItem(ME_KEY);
         if (me) setMyMemberId(me);
-        // โหลดธีมที่เคยตั้งไว้ (device preference); ค่าเพี้ยน/ไม่มี → คงไว้ 'dark' (default)
+        // โหลดธีมที่เคยตั้งไว้ (device preference); ค่าเพี้ยน/ไม่มี → คงไว้ 'light' (default)
         const savedTheme = await AsyncStorage.getItem(THEME_KEY);
         if (savedTheme === 'light' || savedTheme === 'dark') setTheme(savedTheme);
         // กลับเข้ากลุ่มเดิมถ้ามี session ค้างและ backend พร้อม
