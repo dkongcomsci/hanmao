@@ -2,6 +2,8 @@
 
 แอปหารค่าอาหาร/เครื่องดื่ม รองรับ iOS, Android และ Web จาก codebase เดียว (Expo + React Native + TypeScript)
 
+🔗 **ใช้งานได้เลยบนเว็บ:** https://velvety-blancmange-38d0b7.netlify.app/
+
 ## ฟีเจอร์
 
 - **สมาชิก** — เพิ่มคน กำหนดว่ากิน *อาหาร / เครื่องดื่ม / ทั้งสอง* บันทึกเวลามา–กลับ ใส่พร้อมเพย์
@@ -73,6 +75,8 @@ npm run android   # เปิดบน Android emulator
 | จะใช้ **เช็กพื้นที่ร้าน** | เปิดสิทธิ์ตำแหน่งเมื่อแอปถาม (iOS/Android เท่านั้น — เว็บไม่มีฟีเจอร์นี้) |
 
 ## Deploy ขึ้น public ฟรี (Netlify)
+
+> เว็บที่ deploy แล้ว: https://velvety-blancmange-38d0b7.netlify.app/
 
 เว็บของหารเมาเป็น **static export** (`expo export --platform web` → โฟลเดอร์ `dist/`) จึง host ฟรีได้บน Netlify
 Netlify **build + host ให้บน server ของเขาเอง** — ไม่ต้องเปิดเครื่องเราค้างไว้ ปิดเครื่องแล้วเว็บยังออนไลน์
