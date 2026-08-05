@@ -72,6 +72,30 @@ npm run android   # เปิดบน Android emulator
 | จะใช้ **แชร์รูปสรุปบนมือถือ** | rebuild dev client: `npx expo run:ios` / `npx expo run:android` — ใช้ native module (`react-native-view-shot` + `expo-sharing`) จึงไม่ทำงานใน Expo Go ที่ build ไว้ก่อน; **บนเว็บใช้ได้ทันที** |
 | จะใช้ **เช็กพื้นที่ร้าน** | เปิดสิทธิ์ตำแหน่งเมื่อแอปถาม (iOS/Android เท่านั้น — เว็บไม่มีฟีเจอร์นี้) |
 
+## Deploy ขึ้น public ฟรี (Netlify)
+
+เว็บของหารเมาเป็น **static export** (`expo export --platform web` → โฟลเดอร์ `dist/`) จึง host ฟรีได้บน Netlify
+Netlify **build + host ให้บน server ของเขาเอง** — ไม่ต้องเปิดเครื่องเราค้างไว้ ปิดเครื่องแล้วเว็บยังออนไลน์
+
+โปรเจกต์มี [`netlify.toml`](netlify.toml) ให้แล้ว (build command + SPA redirect `/* → /index.html`
+เพื่อให้ reload/เปิดลิงก์ตรงบน deep route เช่น `/summary`, `/bill/xxx`, `/join/xxx` ไม่ 404)
+
+ทำตามลำดับนี้:
+
+1. **เตรียม Supabase ก่อน** (ถ้าจะเปิด group mode) — ทำตามหัวข้อ "วงหลายคน real-time" ด้านบนให้ครบ:
+   สร้าง project → รัน `schema.sql` → เปิด Anonymous sign-in → เก็บค่า
+   `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` ไว้
+   > ข้ามขั้นนี้ได้ถ้าอยากได้แค่ local-only (เว็บใช้งานคนเดียว ไม่มีแท็บวง)
+2. **push โค้ดขึ้น GitHub** (repo ต้องมี `netlify.toml` ที่เพิ่งเพิ่ม)
+3. **เชื่อม Netlify**: https://netlify.com → Add new site → Import from Git → เลือก repo
+   — build settings อ่านจาก `netlify.toml` อัตโนมัติ ไม่ต้องกรอก
+4. **ใส่ env** (ถ้าเปิด group mode): Site configuration → Environment variables → เพิ่ม
+   `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` จากขั้น 1
+   > anon key ถูก inline เข้า bundle เป็น **public โดยตั้งใจ** — ความปลอดภัยพึ่ง RLS (ต้องรัน `patch-004` แล้ว)
+5. **Deploy** → ได้ URL `https://<ชื่อ>.netlify.app` (auto-deploy ทุกครั้งที่ push)
+6. **ปิดท้าย** (group mode): กลับไป Supabase → Authentication → URL Configuration →
+   เพิ่ม URL Netlify เข้า Site URL
+
 ## โครงสร้าง
 
 ```

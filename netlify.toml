@@ -1,0 +1,17 @@
+# Netlify config — deploy หารเมา เป็น static web (Expo export)
+#
+# Netlify build/host บน server ของเขาเอง ไม่ต้องเปิดเครื่องเราค้างไว้
+# env สำหรับ group mode (EXPO_PUBLIC_SUPABASE_*) ตั้งใน Netlify dashboard
+# (Site configuration → Environment variables) ไม่ commit ลงไฟล์นี้
+
+[build]
+  command = "npm run build:web"
+  publish = "dist"
+
+# SPA fallback: expo export เป็น index.html เดียว + routing ฝั่ง client
+# ทุก path ที่ไม่ตรงไฟล์จริง → /index.html ไม่งั้น reload/เปิดลิงก์ตรง
+# บน deep route (bill/[id], join/[code], /summary) จะ 404
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
