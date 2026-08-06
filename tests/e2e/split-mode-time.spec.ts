@@ -2,6 +2,7 @@ import { Page, expect, test } from '@playwright/test';
 import {
   addItem,
   addMember,
+  confirmPopup,
   createBill,
   freshPage,
   markArrived,
@@ -194,8 +195,8 @@ test.describe('regression: ติ๊ก "โอนแล้ว" ในบิล�
     await page.waitForLoadState('networkidle');
     await page.getByRole('checkbox', { name: 'ดำ โอนให้ แดง แล้ว' }).click();
 
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'ลบข้อมูลทั้งหมดถาวร' }).click();
+    await confirmPopup(page);
 
     await expect(page.getByText('ยังไม่มีบิล')).toBeVisible();
     await openTab(page, 'members');

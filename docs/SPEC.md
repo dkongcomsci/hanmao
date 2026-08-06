@@ -347,6 +347,8 @@ Navigation = **bottom tabs** 5 แท็บ (หน้าแรก/สมาช�
   - local: เขียนทั้งบิลรวม items ผ่าน `mutBill`
   - group: อัปเดตฟิลด์บิลผ่าน `billPatchToRow` (ตัว map **ตั้งใจ drop `items`** เพราะ items อยู่คนละตาราง `bill_items`) แล้ว **diff items แยก**: ลบ item ที่หายไป (`bill_items.delete`) + `upsert` item ที่เหลือ. มีเพราะ `updateBill` เดิมส่ง patch ผ่าน `billPatchToRow` จึง sync เมนูขึ้น server ไม่ขึ้น
   - `reset()`: ล้าง state เป็นว่างในโหมดปัจจุบัน — **มี call site ที่หน้าแรก** (ปุ่ม "เริ่มทำรายการใหม่"); หน้าสรุปใช้ `closeGroup()` แทน
+    - local: `commit(() => empty)` เฉย ๆ
+    - **group: ต้องลบข้อมูลบนเซิร์ฟเวอร์ด้วย** — ลบ `bills` (bill_items ตาม cascade) + `members` + เคลียร์ `settlements` ของกลุ่ม ผ่าน `remote(...)`. ถ้าล้างแต่ state ในเครื่อง realtime `refetch` จะดึงแถวเก่ากลับมาทับ ⇒ ข้อมูลที่ "ลบ" ไปโผล่กลับ (ต่างจาก `closeGroup()` ที่ลบทั้ง row กลุ่ม — `reset()` คงกลุ่มไว้ ล้างแต่สมาชิก/บิล)
 - **`toggleSettlement(key)`**: group mode ยิง RPC `settlement_toggle` ที่ append/remove **แบบ atomic ฝั่ง Postgres** → สองคนติ๊กพร้อมกันไม่ทับกัน
 - **prune settlements อัตโนมัติ**: ทุก mutation ที่กระทบยอด (เพิ่ม/ลบสมาชิก, แก้/ลบบิล, แก้เมนู ฯลฯ) ผ่าน `commitPrune` ซึ่งเรียก `pruneSettlements()` ให้เอง และ sync การตัดขึ้น server ด้วย RPC `settlements_prune`; ทำตอนโหลด state จากเครื่องด้วย
   **prune ทุกเคสรวมบิลโหมด `time` ที่ยังมีคนไม่กลับ** (ไม่มีข้อยกเว้นแล้ว): `settleUp` ติด `stamp` ให้รายการที่ยอดลอย → `transferKey` นิ่งข้าม `asOf` ที่ต่างกัน จึง prune ที่ `asOf = ตอนนี้` ได้ชุด key เดียวกับที่หน้าจอใช้ ไม่ลบติ๊กที่ยังใช้อยู่ (ดู §4.6)

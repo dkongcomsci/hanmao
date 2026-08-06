@@ -1,5 +1,5 @@
 import { Page, expect, test } from '@playwright/test';
-import { addItem, addMember, createBill, freshPage, openTab, pickPayer, visibleText } from './helpers';
+import { addItem, addMember, confirmPopup, createBill, dismissPopup, freshPage, openTab, pickPayer, visibleText } from './helpers';
 
 /**
  * แก้/ลบบิล + ค่าบริการ/VAT/ส่วนลด ผ่าน UI จริง
@@ -178,8 +178,8 @@ test.describe('ลบเมนู / ลบบิล', () => {
     await addItem(page, 'ต้มยำ', '250');
     await expect(sumRow(page, 'รวมบิลนี้')).toContainText('฿350.00');
 
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'ลบเมนู ต้มยำ' }).click();
+    await confirmPopup(page);
 
     await expect(page.getByText('ต้มยำ', { exact: true })).toHaveCount(0);
     await expect(sumRow(page, 'รวมบิลนี้')).toContainText('฿100.00');
@@ -187,8 +187,8 @@ test.describe('ลบเมนู / ลบบิล', () => {
 
   test('ลบเมนู (กดยกเลิกใน dialog) → เมนูยังอยู่', async ({ page }) => {
     await setupBill(page);
-    page.once('dialog', (d) => d.dismiss());
     await page.getByRole('button', { name: 'ลบเมนู ข้าวผัด' }).click();
+    await dismissPopup(page);
 
     await expect(page.getByText('ข้าวผัด', { exact: true })).toBeVisible();
     await expect(sumRow(page, 'รวมบิลนี้')).toContainText('฿100.00');
@@ -196,8 +196,8 @@ test.describe('ลบเมนู / ลบบิล', () => {
 
   test('ลบเมนูหมดทุกรายการ → บิลกลับไปสถานะยังไม่เข้าสรุป', async ({ page }) => {
     await setupBill(page);
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'ลบเมนู ข้าวผัด' }).click();
+    await confirmPopup(page);
 
     await expect(page.getByText('ยังไม่มีเมนู — ใส่ชื่อเมนูกับราคาด้านบนแล้วกด +')).toBeVisible();
     await expect(page.getByText('• ต้องมีเมนูอย่างน้อย 1 รายการที่มีราคา')).toBeVisible();
@@ -205,8 +205,8 @@ test.describe('ลบเมนู / ลบบิล', () => {
 
   test('ลบบิล (ยืนยัน) → เด้งกลับหน้าบิลทั้งหมด และบิลหายจากสรุป', async ({ page }) => {
     await setupBill(page);
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'ลบบิล บิลข้าว' }).click();
+    await confirmPopup(page);
 
     // replace ไป /bills → เห็น empty state ของหน้าบิล
     await expect(page.getByText('ยังไม่มีบิล')).toBeVisible();
@@ -221,8 +221,8 @@ test.describe('ลบเมนู / ลบบิล', () => {
 
   test('ลบบิล (กดยกเลิกใน dialog) → บิลยังอยู่ ไม่เด้งออกจากหน้า', async ({ page }) => {
     await setupBill(page);
-    page.once('dialog', (d) => d.dismiss());
     await page.getByRole('button', { name: 'ลบบิล บิลข้าว' }).click();
+    await dismissPopup(page);
 
     await expect(page.getByText('ยอดต่อคนในบิลนี้')).toBeVisible();
     await expect(sumRow(page, 'รวมบิลนี้')).toContainText('฿100.00');
@@ -231,8 +231,8 @@ test.describe('ลบเมนู / ลบบิล', () => {
   test('เข้าหน้าบิลที่ถูกลบไปแล้ว → เห็น "ไม่พบบิลนี้" + ปุ่มกลับ', async ({ page }) => {
     await setupBill(page);
     const billUrl = page.url();
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'ลบบิล บิลข้าว' }).click();
+    await confirmPopup(page);
     await expect(page.getByText('ยังไม่มีบิล')).toBeVisible();
 
     await page.goto(billUrl);

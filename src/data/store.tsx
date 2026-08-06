@@ -537,15 +537,22 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         const prevItems = stateRef.current.bills.find((b) => b.id === bill.id)?.items ?? [];
         // เขียนทั้งบิล (ฟิลด์ + เมนู) ลง state ทีเดียว
         mutBill(bill.id, () => bill);
-        remote(() => {
+        remote(async () => {
           const client = sb();
           const groupId = gid();
+          // ต้อง await ทุก query — builder ของ supabase-js เป็น thenable แบบ lazy
+          // ยิงจริงตอน .then()/await เท่านั้น ปล่อยลอย (void) = ไม่ยิงเลย
+          // (เดิมฟิลด์บิล/เมนูที่ลบไม่ถูกเขียน แล้ว realtime refetch ทับ optimistic ทิ้ง)
           // 1) ฟิลด์ของบิลเอง (ไม่รวม items — items อยู่คนละตาราง)
-          void client.from('bills').update(billPatchToRow(bill)).eq('id', bill.id);
+          const bres = await client.from('bills').update(billPatchToRow(bill)).eq('id', bill.id);
+          if (bres.error) return bres;
           // 2) เมนูที่ถูกลบออก
           const nextIds = new Set(bill.items.map((it) => it.id));
           const removed = prevItems.filter((it) => !nextIds.has(it.id)).map((it) => it.id);
-          if (removed.length) void client.from('bill_items').delete().in('id', removed);
+          if (removed.length) {
+            const dres = await client.from('bill_items').delete().in('id', removed);
+            if (dres.error) return dres;
+          }
           // 3) เมนูที่เหลือ/เพิ่มใหม่ — upsert ทั้งชุด (insert ตัวใหม่, update ตัวเดิม)
           if (bill.items.length) {
             return client
@@ -597,7 +604,29 @@ export function StoreProvider({ children }: Readonly<{ children: React.ReactNode
         remote(() => sb().from('groups').update({ venue: v }).eq('id', gid()));
       },
       reset: () => {
+        // group mode: ต้องลบข้อมูลบนเซิร์ฟเวอร์ด้วย ไม่งั้น realtime refetch จะดึงของเก่ากลับมาทับ
+        // (เก็บ id ไว้ก่อน commit → หลัง commit stateRef เป็น empty แล้ว)
+        const prev = stateRef.current;
+        const memberIds = prev.members.map((m) => m.id);
+        const billIds = prev.bills.map((b) => b.id);
         commit(() => empty);
+        remote(async () => {
+          const client = sb();
+          const groupId = gid();
+          // bills ลบก่อน (bill_items ตาม cascade) แล้วค่อย members (paid_by_id/references เคลียร์ตาม cascade/set null)
+          if (billIds.length) {
+            const bres = await client.from('bills').delete().in('id', billIds);
+            if (bres.error) return bres;
+          }
+          if (memberIds.length) {
+            const mres = await client.from('members').delete().in('id', memberIds);
+            if (mres.error) return mres;
+          }
+          // เคลียร์การติ๊ก "โอนแล้ว" บนแถวกลุ่มด้วย (ยอดหายหมดแล้ว key เดิมเป็นโมฆะ)
+          if (prev.settlements.length && groupId) {
+            return client.from('groups').update({ settlements: [] }).eq('id', groupId);
+          }
+        });
       },
 
       toggleSettlement: (key) => {

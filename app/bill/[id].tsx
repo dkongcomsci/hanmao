@@ -29,6 +29,17 @@ export default function BillDetail() {
   const [itemPrice, setItemPrice] = useState('');
   // เปิด popup เลือกหน้าถัดไปหลังบันทึกสำเร็จ (เป็น component ในแอป ไม่ใช้ dialog ของ browser)
   const [savedModal, setSavedModal] = useState(false);
+  // ย่อ/ขยายตัวเลือกเพิ่มเติม — ค่าเริ่มต้นย่อไว้ (โชว์เฉพาะคนจ่าย + เมนู)
+  // แต่ถ้าบิลนี้ตั้งค่าขั้นสูงไว้แล้ว (ไม่ใช่ค่า default) → กางไว้เลย จะได้ไม่ซ่อนของที่ตั้งไว้
+  const hasAdvanced = !!bill && (
+    bill.splitMode !== 'equal' ||
+    bill.isTreat === true ||
+    bill.memberIds.length > 0 ||
+    bill.serviceChargePct > 0 ||
+    bill.vatPct > 0 ||
+    bill.discount > 0
+  );
+  const [expanded, setExpanded] = useState(hasAdvanced);
 
   // draft = สำเนาที่แก้ในหน้านี้ ยังไม่เขียนลง store จนกว่าจะกด "บันทึก"
   const [draft, setDraft] = useState<Bill | null>(bill ?? null);
@@ -167,27 +178,124 @@ export default function BillDetail() {
         <Text style={s.errorText}>ยังไม่ได้ตั้งชื่อบิล — ตั้งชื่อไว้จะหาง่ายกว่า</Text>
       )}
 
-      {/* วิธีหาร */}
-      <Text style={s.section}>วิธีหาร</Text>
-      <View style={s.chips}>
-        {MODES.map((m) => (
-          <Pressable
-            key={m}
-            onPress={() => patch({ splitMode: m })}
-            style={[s.chip, draft.splitMode === m && s.chipActive]}
-            {...a11y('button', { selected: draft.splitMode === m })}
-            accessibilityLabel={`วิธีหาร ${splitModeLabel[m]}`}
-          >
-            <Text style={[s.chipText, draft.splitMode === m && s.chipTextActive]}>
-              {splitModeLabel[m]}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      {draft.splitMode === 'time' && (
-        <Text style={s.hint}>
-          ใช้เวลามา-กลับของแต่ละคน (ตั้งที่แท็บสมาชิก) · คนที่ยังไม่กลับคิดถึงตอนนี้
+      {/* ปุ่มย่อ/ขยายตัวเลือกเพิ่มเติม — ค่าเริ่มต้นย่อไว้ โชว์เฉพาะช่องจำเป็น (คนจ่าย + เมนู) */}
+      <Pressable
+        style={s.expandToggle}
+        onPress={() => setExpanded((v) => !v)}
+        {...a11y('button', { expanded })}
+        accessibilityLabel={expanded ? 'ซ่อนตัวเลือกเพิ่มเติม' : 'แสดงตัวเลือกเพิ่มเติม'}
+      >
+        <Text style={s.expandToggleText}>
+          {expanded ? 'ซ่อนตัวเลือกเพิ่มเติม' : 'ตัวเลือกเพิ่มเติม (วิธีหาร · เลี้ยง · ผู้ร่วม · ค่าบริการ)'}
         </Text>
+        <Text style={s.expandChevron}>{expanded ? '▲' : '▼'}</Text>
+      </Pressable>
+
+      {expanded && (
+        <>
+          {/* วิธีหาร */}
+          <Text style={s.section}>วิธีหาร</Text>
+          <View style={s.chips}>
+            {MODES.map((m) => (
+              <Pressable
+                key={m}
+                onPress={() => patch({ splitMode: m })}
+                style={[s.chip, draft.splitMode === m && s.chipActive]}
+                {...a11y('button', { selected: draft.splitMode === m })}
+                accessibilityLabel={`วิธีหาร ${splitModeLabel[m]}`}
+              >
+                <Text style={[s.chipText, draft.splitMode === m && s.chipTextActive]}>
+                  {splitModeLabel[m]}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {draft.splitMode === 'time' && (
+            <Text style={s.hint}>
+              ใช้เวลามา-กลับของแต่ละคน (ตั้งที่แท็บสมาชิก) · คนที่ยังไม่กลับคิดถึงตอนนี้
+            </Text>
+          )}
+
+          {/* บิลเลี้ยง: คนจ่ายรับผิดชอบยอดเต็ม คนอื่นจ่าย 0 */}
+          <Pressable
+            style={[s.treatRow, draft.isTreat && s.treatRowActive]}
+            onPress={() => patch({ isTreat: !draft.isTreat })}
+            disabled={!draft.paidById}
+            {...a11y('switch', { checked: !!draft.isTreat, disabled: !draft.paidById })}
+            accessibilityLabel="บิลนี้คนจ่ายเลี้ยง"
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[s.treatTitle, !draft.paidById && { opacity: 0.4 }]}>🎁 คนจ่ายเลี้ยง</Text>
+              <Text style={[s.treatDesc, !draft.paidById && { opacity: 0.4 }]}>
+                {payerName ? `${payerName} จ่ายเต็ม คนอื่นไม่ต้องหาร` : 'เลือกคนออกเงินก่อน'}
+              </Text>
+            </View>
+            <View style={[s.toggle, draft.isTreat && s.toggleOn]}>
+              <View style={[s.knob, draft.isTreat && s.knobOn]} />
+            </View>
+          </Pressable>
+
+          {/* ใครร่วมบิลนี้ (เผื่อมาทีหลัง/กลับก่อน) */}
+          <Text style={s.section}>ใครร่วมบิลนี้</Text>
+          <Text style={s.hint}>{participantHint}</Text>
+          <View style={s.chips}>
+            {store.state.members.map((m) => {
+              const on = draft.memberIds.includes(m.id);
+              return (
+                <Pressable
+                  key={m.id}
+                  onPress={() =>
+                    patch({
+                      memberIds: on
+                        ? draft.memberIds.filter((x) => x !== m.id)
+                        : [...draft.memberIds, m.id],
+                    })
+                  }
+                  style={[s.chip, on && s.chipActive]}
+                  {...a11y('checkbox', { checked: on })}
+                  accessibilityLabel={`ผู้ร่วมบิล ${m.name}`}
+                >
+                  <Text style={[s.chipText, on && s.chipTextActive]}>{m.name}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {/* เลือกคนไว้แต่ไม่มีใครเข้าเงื่อนไขหมวดบิล = ยอดจะไปกองที่คนจ่ายคนเดียว ต้องบอกให้รู้ */}
+          {store.state.members.length > 0 && eligible.length === 0 && (
+            <Text style={s.errorText}>
+              ยังไม่มีใครเข้าเงื่อนไขบิลนี้ ({allWord}) — ยอดทั้งบิลจะตกเป็นของคนออกเงินคนเดียว
+            </Text>
+          )}
+
+          {/* ค่าบริการ / vat / ส่วนลด */}
+          <Text style={s.section}>ค่าบริการ & ส่วนลด</Text>
+          <View style={s.chargeRow}>
+            <ChargeInput
+              s={s}
+              c={c}
+              label="Service %"
+              a11yLabel="ค่าบริการ เปอร์เซ็นต์"
+              value={draft.serviceChargePct}
+              onChange={(n) => patch({ serviceChargePct: n })}
+            />
+            <ChargeInput
+              s={s}
+              c={c}
+              label="VAT %"
+              a11yLabel="ภาษีมูลค่าเพิ่ม เปอร์เซ็นต์"
+              value={draft.vatPct}
+              onChange={(n) => patch({ vatPct: n })}
+            />
+            <ChargeInput
+              s={s}
+              c={c}
+              label="ส่วนลด ฿"
+              a11yLabel="ส่วนลด บาท"
+              value={draft.discount}
+              onChange={(n) => patch({ discount: n })}
+            />
+          </View>
+        </>
       )}
 
       {/* คนจ่ายบิลนี้ (จำเป็น) */}
@@ -218,58 +326,7 @@ export default function BillDetail() {
         )}
       </View>
 
-      {/* บิลเลี้ยง: คนจ่ายรับผิดชอบยอดเต็ม คนอื่นจ่าย 0 */}
-      <Pressable
-        style={[s.treatRow, draft.isTreat && s.treatRowActive]}
-        onPress={() => patch({ isTreat: !draft.isTreat })}
-        disabled={!draft.paidById}
-        {...a11y('switch', { checked: !!draft.isTreat, disabled: !draft.paidById })}
-        accessibilityLabel="บิลนี้คนจ่ายเลี้ยง"
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[s.treatTitle, !draft.paidById && { opacity: 0.4 }]}>🎁 คนจ่ายเลี้ยง</Text>
-          <Text style={[s.treatDesc, !draft.paidById && { opacity: 0.4 }]}>
-            {payerName ? `${payerName} จ่ายเต็ม คนอื่นไม่ต้องหาร` : 'เลือกคนออกเงินก่อน'}
-          </Text>
-        </View>
-        <View style={[s.toggle, draft.isTreat && s.toggleOn]}>
-          <View style={[s.knob, draft.isTreat && s.knobOn]} />
-        </View>
-      </Pressable>
-
-      {/* ใครร่วมบิลนี้ (เผื่อมาทีหลัง/กลับก่อน) */}
-      <Text style={s.section}>ใครร่วมบิลนี้</Text>
-      <Text style={s.hint}>{participantHint}</Text>
-      <View style={s.chips}>
-        {store.state.members.map((m) => {
-          const on = draft.memberIds.includes(m.id);
-          return (
-            <Pressable
-              key={m.id}
-              onPress={() =>
-                patch({
-                  memberIds: on
-                    ? draft.memberIds.filter((x) => x !== m.id)
-                    : [...draft.memberIds, m.id],
-                })
-              }
-              style={[s.chip, on && s.chipActive]}
-              {...a11y('checkbox', { checked: on })}
-              accessibilityLabel={`ผู้ร่วมบิล ${m.name}`}
-            >
-              <Text style={[s.chipText, on && s.chipTextActive]}>{m.name}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {/* เลือกคนไว้แต่ไม่มีใครเข้าเงื่อนไขหมวดบิล = ยอดจะไปกองที่คนจ่ายคนเดียว ต้องบอกให้รู้ */}
-      {store.state.members.length > 0 && eligible.length === 0 && (
-        <Text style={s.errorText}>
-          ยังไม่มีใครเข้าเงื่อนไขบิลนี้ ({allWord}) — ยอดทั้งบิลจะตกเป็นของคนออกเงินคนเดียว
-        </Text>
-      )}
-
-      {/* เมนู */}
+      {/* เมนู (จำเป็น) */}
       <Text style={s.section}>เมนู</Text>
       <View style={s.addItemRow}>
         <TextInput
@@ -356,35 +413,6 @@ export default function BillDetail() {
         </View>
       ))}
 
-      {/* ค่าบริการ / vat / ส่วนลด */}
-      <Text style={s.section}>ค่าบริการ & ส่วนลด</Text>
-      <View style={s.chargeRow}>
-        <ChargeInput
-          s={s}
-          c={c}
-          label="Service %"
-          a11yLabel="ค่าบริการ เปอร์เซ็นต์"
-          value={draft.serviceChargePct}
-          onChange={(n) => patch({ serviceChargePct: n })}
-        />
-        <ChargeInput
-          s={s}
-          c={c}
-          label="VAT %"
-          a11yLabel="ภาษีมูลค่าเพิ่ม เปอร์เซ็นต์"
-          value={draft.vatPct}
-          onChange={(n) => patch({ vatPct: n })}
-        />
-        <ChargeInput
-          s={s}
-          c={c}
-          label="ส่วนลด ฿"
-          a11yLabel="ส่วนลด บาท"
-          value={draft.discount}
-          onChange={(n) => patch({ discount: n })}
-        />
-      </View>
-
       {/* สรุปบิล */}
       <View style={s.summary}>
         <SumRow s={s} label="ยอดเมนู" value={baht(bd.subtotal)} />
@@ -397,21 +425,6 @@ export default function BillDetail() {
       {bd.total < 0 && (
         <Text style={s.errorText}>ยอดรวมติดลบ — ส่วนลดมากกว่ายอดบิล ตรวจตัวเลขอีกครั้ง</Text>
       )}
-
-      <Text style={s.section}>ยอดต่อคนในบิลนี้</Text>
-      {!!bd.soleBearerId && (
-        <Text style={s.hint}>
-          {draft.isTreat
-            ? `🎁 ${payerName ?? 'คนออกเงิน'} เลี้ยงบิลนี้ — คนอื่นไม่ต้องหาร`
-            : 'ไม่มีคนเข้าเงื่อนไขบิลนี้ — ยอดทั้งบิลตกเป็นของคนออกเงินคนเดียว'}
-        </Text>
-      )}
-      {[...bd.perMember.entries()].map(([mid, amt]) => {
-        const m = store.state.members.find((x) => x.id === mid);
-        // ไม่เจอ member (ถูกลบ/ยังไม่ sync) ก็ต้องโชว์ยอด ไม่ซ่อนเงินหาย
-        return <SumRow s={s} key={mid} label={m?.name ?? '(ไม่อยู่ในรายชื่อสมาชิก)'} value={baht(amt)} />;
-      })}
-      {bd.perMember.size === 0 && <Text style={s.hint}>ยังไม่มีคนเข้าเงื่อนไขบิลนี้</Text>}
 
       {/* เตือนเมื่อบิลยังไม่สมบูรณ์ (ไม่เข้าสรุปจนกว่าจะครบ) */}
       {issues.length > 0 && (
@@ -593,6 +606,22 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   },
   section: { color: c.text, fontSize: 16, fontWeight: '700', marginTop: 12 },
   required: { color: c.danger, fontWeight: '800' },
+  expandToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    backgroundColor: c.cardAlt,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    minHeight: 44,
+  },
+  expandToggleText: { color: c.text, fontSize: 14, fontWeight: '700', flex: 1 },
+  expandChevron: { color: c.sub, fontSize: 12 },
   hint: { color: c.sub, fontSize: 12 },
   warnBox: {
     backgroundColor: c.cardAlt,

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addMember, freshPage } from './helpers';
+import { addMember, confirmPopup, freshPage } from './helpers';
 
 /** เตรียม: 2 สมาชิก + 1 บิล 100 บาท จ่ายโดยแดง → ดำติดแดง 50 (1 รายการโอน) */
 async function setupOneTransfer(page: import('@playwright/test').Page) {
@@ -60,9 +60,9 @@ test.describe('Checklist โอนแล้ว + เคลียร์เมื�
     await page.waitForLoadState('networkidle');
     await page.getByText('ยังไม่โอน — แตะเมื่อโอนแล้ว').click();
 
-    // ยืนยัน dialog (web = window.confirm)
-    page.once('dialog', (d) => d.accept());
+    // ยืนยันผ่าน popup ในแอป (แทน window.confirm เดิม)
     await page.getByText('เคลียร์ทั้งหมด').click();
+    await confirmPopup(page);
 
     // ยอดรวมกลับเป็น 0 + ไม่มีบิล
     await expect(page.getByText('฿0.00').first()).toBeVisible();

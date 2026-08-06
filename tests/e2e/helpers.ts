@@ -132,6 +132,19 @@ export async function markLeft(page: Page, name: string) {
   await expect(timeToggle(page, name, '✓ กลับแล้ว')).toBeVisible();
 }
 
+/**
+ * ยืนยัน popup ในแอป (แทน window.confirm เดิม) — กดปุ่มยืนยัน (default/destructive)
+ * popup แสดงผ่าน <PopupHost/> ที่ mount ใน _layout; ปุ่มมี testID `popup-btn-<kind>`
+ */
+export async function confirmPopup(page: Page) {
+  await page.getByTestId(/^popup-btn-(default|destructive)$/).click();
+}
+
+/** ยกเลิก popup ในแอป — กดปุ่ม "ยกเลิก" (cancel) */
+export async function dismissPopup(page: Page) {
+  await page.getByTestId('popup-btn-cancel').click();
+}
+
 /** ตั้งว่า "ฉันคือใคร" ในแท็บฉัน (ต้องมีสมาชิกชื่อนี้อยู่แล้ว) */
 export async function pickMe(page: Page, name: string) {
   await page.goto('/me');

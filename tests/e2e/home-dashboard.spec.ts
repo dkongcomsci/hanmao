@@ -2,6 +2,7 @@ import { Page, expect, test } from '@playwright/test';
 import {
   addItem,
   addMember,
+  confirmPopup,
   createBill,
   freshPage,
   markArrived,
@@ -135,8 +136,8 @@ test.describe('หน้าแรก: onboarding vs ทางลัด', () => {
     // ปุ่มเคลียร์โผล่เฉพาะเมื่อไม่มีหนี้ค้าง → ต้องติ๊ก "โอนแล้ว" ให้ครบก่อน
     await openTab(page, 'summary');
     await page.getByRole('checkbox', { name: 'ดำ โอนให้ แดง แล้ว' }).click();
-    page.once('dialog', (d) => d.accept());
     await page.getByRole('button', { name: 'ลบข้อมูลทั้งหมดถาวร' }).click();
+    await confirmPopup(page);
 
     await openTab(page, 'home');
     await expect(visibleText(page, 'เริ่มใช้งานใน 3 ขั้น 👋')).toBeVisible();

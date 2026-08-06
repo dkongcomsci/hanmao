@@ -1,6 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import type { AccessibilityRole, AccessibilityState } from 'react-native';
+import { showPopup } from './popup';
 
 // โทนสี + helper แสดงผลที่ใช้ร่วมกันทุกหน้า
 //
@@ -151,8 +152,9 @@ export const splitModeLabel: Record<string, string> = {
 };
 
 /**
- * ยืนยันก่อนทำ action ที่ย้อนกลับไม่ได้ — รองรับทั้ง native (Alert) และ web (window.confirm)
+ * ยืนยันก่อนทำ action ที่ย้อนกลับไม่ได้ — เปิด popup component ในแอป (ทุกแพลตฟอร์ม)
  * ใช้ได้ทั้งการลบและการเคลียร์/ปิดกลุ่ม โดยกำหนดหัวข้อ/รายละเอียด/ป้ายปุ่มเองได้
+ * (เดิมใช้ Alert.alert/window.confirm — ตอนนี้ยิงผ่านบัสไปให้ <PopupHost/> เรนเดอร์)
  */
 export function confirmAction(opts: {
   title: string;
@@ -162,15 +164,15 @@ export function confirmAction(opts: {
   onConfirm: () => void;
 }) {
   const { title, message, confirmLabel = 'ลบ', onConfirm } = opts;
-  if (Platform.OS === 'web') {
-    // web ไม่มี Alert.alert แบบ native → ใช้ window.confirm
-    if (typeof window !== 'undefined' && window.confirm(`${title}\n${message}`)) onConfirm();
-    return;
-  }
-  Alert.alert(title, message, [
-    { text: 'ยกเลิก', style: 'cancel' },
-    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
-  ]);
+  showPopup({
+    title,
+    message,
+    // ปุ่มยืนยันอยู่บน (เด่นกว่า) ปุ่มยกเลิกอยู่ล่าง — เข้าชุดกับ modal อื่นในแอปที่วางแนวตั้ง
+    buttons: [
+      { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+      { text: 'ยกเลิก', style: 'cancel' },
+    ],
+  });
 }
 
 /** ยืนยันก่อนลบสิ่งที่ย้อนกลับไม่ได้ */
@@ -184,15 +186,15 @@ export function confirmRemove(name: string, onConfirm: () => void) {
 }
 
 /**
- * แจ้งเตือนผู้ใช้ (ข้อความสั้น ๆ) — `Alert.alert` ไม่โผล่บน web
- * web: ใช้ window.alert; native: Alert.alert
+ * แจ้งเตือนผู้ใช้ (ข้อความสั้น ๆ) — เปิด popup component ในแอป (ทุกแพลตฟอร์ม)
+ * เดิมใช้ window.alert/Alert.alert; ตอนนี้ยิงผ่านบัสไปให้ <PopupHost/> เรนเดอร์
  */
 export function notify(title: string, message?: string) {
-  if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined') window.alert(message ? `${title}\n${message}` : title);
-    return;
-  }
-  Alert.alert(title, message);
+  showPopup({
+    title,
+    message,
+    buttons: [{ text: 'ตกลง', style: 'default' }],
+  });
 }
 
 /**

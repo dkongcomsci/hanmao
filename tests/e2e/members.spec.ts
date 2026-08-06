@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addMember, freshPage } from './helpers';
+import { addMember, confirmPopup, dismissPopup, freshPage } from './helpers';
 
 test.describe('หน้าสมาชิก (members)', () => {
   test.beforeEach(async ({ page }) => {
@@ -53,17 +53,17 @@ test.describe('หน้าสมาชิก (members)', () => {
 
   test('ลบสมาชิก (ยืนยันก่อนลบ)', async ({ page }) => {
     await addMember(page, 'เอฟ');
-    // บน web ใช้ window.confirm → ต้อง accept dialog ก่อน
-    page.once('dialog', (d) => d.accept());
+    // กดลบ → popup ยืนยันในแอป (แทน window.confirm เดิม) → กดยืนยัน
     await page.getByText('ลบ', { exact: true }).click();
+    await confirmPopup(page);
     await expect(page.getByText('เอฟ')).toHaveCount(0);
     await expect(page.getByText('ยังไม่มีสมาชิก')).toBeVisible();
   });
 
   test('ยกเลิกการลบ → สมาชิกยังอยู่', async ({ page }) => {
     await addMember(page, 'จี');
-    page.once('dialog', (d) => d.dismiss());
     await page.getByText('ลบ', { exact: true }).click();
+    await dismissPopup(page);
     await expect(page.getByText('จี')).toBeVisible();
   });
 });

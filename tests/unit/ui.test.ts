@@ -12,6 +12,7 @@ import {
   notify,
   timeStr,
 } from '../../src/ui';
+import { setPopupListener, PopupRequest } from '../../src/ui/popup';
 
 /**
  * เทส helper ใน src/ui/index.ts บน node (Platform.OS = 'web' จาก stub ใน tests/unit/stubs/)
@@ -199,71 +200,84 @@ describe('copyText', () => {
   });
 });
 
-// ---------- notify / confirmAction (web path ใช้ window) ----------
+// ---------- notify / confirmAction (ยิงผ่านบัส popup ไปให้ <PopupHost/>) ----------
 
-/** ติดตั้ง window ปลอมสำหรับเทส (web path ของ notify/confirmAction) */
-function withWindow<T>(win: Record<string, unknown>, fn: () => T): T {
-  const g = globalThis as { window?: unknown };
-  const had = 'window' in g;
-  const prev = g.window;
-  g.window = win;
+/**
+ * ดักคำสั่ง popup ระหว่างเรียก fn แล้วคืนคำสั่งที่ถูกยิง
+ * (notify/confirmAction ไม่แตะ window แล้ว — ยิง showPopup ผ่านบัสใน src/ui/popup.ts)
+ */
+function capturePopups<T>(fn: () => T): { requests: PopupRequest[]; ret: T } {
+  const requests: PopupRequest[] = [];
+  const off = setPopupListener((req) => requests.push(req));
   try {
-    return fn();
+    const ret = fn();
+    return { requests, ret };
   } finally {
-    if (had) g.window = prev;
-    else delete g.window;
+    off();
   }
 }
 
-describe('notify (web)', () => {
-  test('มีข้อความประกอบ → รวมหัวข้อกับข้อความด้วยขึ้นบรรทัดใหม่', () => {
-    const alert = mock.fn((_m: string) => {});
-    withWindow({ alert }, () => notify('คัดลอกแล้ว', 'พร้อมเพย์ของ แดง'));
-    assert.equal(alert.mock.callCount(), 1);
-    assert.equal(alert.mock.calls[0].arguments[0], 'คัดลอกแล้ว\nพร้อมเพย์ของ แดง');
+describe('notify (popup)', () => {
+  test('มีข้อความประกอบ → title + message แยกกัน + ปุ่ม "ตกลง"', () => {
+    const { requests } = capturePopups(() => notify('คัดลอกแล้ว', 'พร้อมเพย์ของ แดง'));
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].title, 'คัดลอกแล้ว');
+    assert.equal(requests[0].message, 'พร้อมเพย์ของ แดง');
+    assert.equal(requests[0].buttons.length, 1);
+    assert.equal(requests[0].buttons[0].text, 'ตกลง');
   });
 
-  test('ไม่มีข้อความประกอบ → หัวข้อล้วน', () => {
-    const alert = mock.fn((_m: string) => {});
-    withWindow({ alert }, () => notify('บันทึกแล้ว'));
-    assert.equal(alert.mock.calls[0].arguments[0], 'บันทึกแล้ว');
+  test('ไม่มีข้อความประกอบ → มีแต่ title', () => {
+    const { requests } = capturePopups(() => notify('บันทึกแล้ว'));
+    assert.equal(requests[0].title, 'บันทึกแล้ว');
+    assert.equal(requests[0].message, undefined);
   });
 });
 
-describe('confirmAction (web)', () => {
-  test('ผู้ใช้ยืนยัน → เรียก onConfirm', () => {
+describe('confirmAction (popup)', () => {
+  test('กดปุ่มยืนยัน → เรียก onConfirm', () => {
     const onConfirm = mock.fn();
-    const confirm = mock.fn((_m: string) => true);
-    withWindow({ confirm }, () =>
+    const { requests } = capturePopups(() =>
       confirmAction({ title: 'ลบถาวร?', message: 'กู้คืนไม่ได้', onConfirm }),
     );
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].title, 'ลบถาวร?');
+    assert.equal(requests[0].message, 'กู้คืนไม่ได้');
+    // ปุ่มยืนยัน (destructive) กับปุ่มยกเลิก (cancel)
+    const confirmBtn = requests[0].buttons.find((b) => b.style === 'destructive');
+    const cancelBtn = requests[0].buttons.find((b) => b.style === 'cancel');
+    assert.ok(confirmBtn);
+    assert.ok(cancelBtn);
+    // กดยืนยัน → onConfirm ทำงาน
+    confirmBtn!.onPress?.();
     assert.equal(onConfirm.mock.callCount(), 1);
-    // ข้อความที่ผู้ใช้เห็น = หัวข้อ + รายละเอียด
-    assert.equal(confirm.mock.calls[0].arguments[0], 'ลบถาวร?\nกู้คืนไม่ได้');
   });
 
-  test('ผู้ใช้ยกเลิก → ไม่เรียก onConfirm (ของไม่ถูกลบ)', () => {
+  test('กดปุ่มยกเลิก → ไม่เรียก onConfirm (ของไม่ถูกลบ)', () => {
     const onConfirm = mock.fn();
-    withWindow({ confirm: () => false }, () =>
+    const { requests } = capturePopups(() =>
       confirmAction({ title: 'ลบถาวร?', message: 'กู้คืนไม่ได้', onConfirm }),
     );
+    const cancelBtn = requests[0].buttons.find((b) => b.style === 'cancel');
+    cancelBtn!.onPress?.();
     assert.equal(onConfirm.mock.callCount(), 0);
   });
 });
 
-describe('confirmRemove (web)', () => {
+describe('confirmRemove (popup)', () => {
   test('ถามชื่อสิ่งที่จะลบ แล้วเรียก onConfirm เมื่อยืนยัน', () => {
     const onConfirm = mock.fn();
-    const confirm = mock.fn((_m: string) => true);
-    withWindow({ confirm }, () => confirmRemove('แดง', onConfirm));
+    const { requests } = capturePopups(() => confirmRemove('แดง', onConfirm));
+    assert.match(requests[0].title, /ยืนยันการลบ/);
+    assert.match(requests[0].message ?? '', /แดง/);
+    requests[0].buttons.find((b) => b.style === 'destructive')!.onPress?.();
     assert.equal(onConfirm.mock.callCount(), 1);
-    assert.match(confirm.mock.calls[0].arguments[0], /ยืนยันการลบ/);
-    assert.match(confirm.mock.calls[0].arguments[0], /แดง/);
   });
 
   test('ยกเลิก → ไม่ลบ', () => {
     const onConfirm = mock.fn();
-    withWindow({ confirm: () => false }, () => confirmRemove('แดง', onConfirm));
+    const { requests } = capturePopups(() => confirmRemove('แดง', onConfirm));
+    requests[0].buttons.find((b) => b.style === 'cancel')!.onPress?.();
     assert.equal(onConfirm.mock.callCount(), 0);
   });
 });

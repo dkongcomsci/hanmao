@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ColorValue, Pressable, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Palette } from '../src/ui';
+import { PopupHost } from '../src/ui/PopupHost';
 import { useTheme } from '../src/ui/theme';
 import { StoreProvider } from '../src/data/store';
 
@@ -113,6 +114,8 @@ function Layout() {
         <Tabs.Screen name="group" options={{ href: null, title: 'กลุ่มหารเงิน' }} />
         <Tabs.Screen name="join/[code]" options={{ href: null, title: 'เข้าร่วมกลุ่ม' }} />
       </Tabs>
+      {/* popup กลางของแอป (notify/confirmAction) — mount ครั้งเดียว ใต้ StoreProvider เพื่อใช้ธีมได้ */}
+      <PopupHost />
     </>
   );
 }
